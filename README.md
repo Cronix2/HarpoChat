@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="assets/harpochat_logo.png" align="center" width="30%">
+    <img src="app\assets\logo.png" align="center" width="30%">
 </p>
 
 <p align="center">
