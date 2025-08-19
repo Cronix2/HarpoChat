@@ -40,7 +40,7 @@ import java.util.Locale
  * ========================= */
 class CalculatorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // 🔒 Retire la barre de titre / action bar si présente
+        // Masque la barre de titre si présente
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
         actionBar?.hide()
@@ -100,9 +100,8 @@ private fun CalculatorScreen(
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Affichage
+    // Affichage (texte saisi dans l’écran)
     var display by remember { mutableStateOf(TextFieldValue("0")) }
-    var expr by remember { mutableStateOf("") }
 
     // Moteur
     var accumulator by remember { mutableStateOf<BigDecimal?>(null) }
@@ -110,13 +109,54 @@ private fun CalculatorScreen(
     var resetOnNextDigit by remember { mutableStateOf(false) }
     val mc = remember { MathContext(16, RoundingMode.HALF_UP) }
 
+    // Nouveaux états pour l’affichage "vidéo 2"
+    var lastExpr by remember { mutableStateOf<String?>(null) }   // ex : "7 + 9"
+    var showEquals by remember { mutableStateOf(false) }         // si true => "7 + 9 =" sur la 1re ligne
+
     fun setDisplayText(s: String) { display = TextFieldValue(s) }
     fun getDisplayText(): String = display.text
+    fun prettyText(s: String): String = s.replace('.', ',')
+
+    fun opSymbol(op: Op) = when (op) {
+        Op.ADD -> "+"
+        Op.SUB -> "−"
+        Op.MUL -> "×"
+        Op.DIV -> "÷"
+    }
+
+    /** Construit la ligne d’expression (ligne du haut) */
+    fun expressionLine(): String {
+        val cur = prettyText(getDisplayText())
+        return when {
+            showEquals && lastExpr != null -> "${lastExpr} ="
+            pendingOp != null && accumulator != null -> {
+                val left = accumulator!!.stripTrailingZeros().toPlainString().replace('.', ',')
+                "$left ${opSymbol(pendingOp!!)} $cur"
+            }
+            else -> cur
+        }
+    }
+
+    /** Aperçu du résultat (ligne du bas) tant que l’expression est complète */
+    fun previewResultOrEmpty(): String {
+        if (showEquals) return ""
+        val acc = accumulator ?: return ""
+        val op = pendingOp ?: return ""
+        val right = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: return ""
+        val result = when (op) {
+            Op.ADD -> acc.add(right, mc)
+            Op.SUB -> acc.subtract(right, mc)
+            Op.MUL -> acc.multiply(right, mc)
+            Op.DIV -> if (right == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(right, mc)
+        }
+        return formatForDisplay(result)
+    }
 
     fun backspace() {
         val cur = getDisplayText()
-        if (cur.length <= 1) setDisplayText("0")
-        else setDisplayText(cur.dropLast(1))
+        val next = if (cur.length <= 1) "0" else cur.dropLast(1)
+        setDisplayText(next)
+        lastExpr = null; showEquals = false
     }
 
     fun inputDigit(d: String) {
@@ -129,40 +169,28 @@ private fun CalculatorScreen(
         }
         setDisplayText(next)
         resetOnNextDigit = false
+        lastExpr = null; showEquals = false
     }
 
     fun inputDot() {
         val cur = getDisplayText()
         if (!cur.contains(".")) setDisplayText(cur + ".")
+        lastExpr = null; showEquals = false
     }
 
     fun clearAll() {
         setDisplayText("0")
-        expr = ""
         accumulator = null
         pendingOp = null
         resetOnNextDigit = false
-    }
-
-    fun opSymbol(op: Op) = when (op) {
-        Op.ADD -> "+"
-        Op.SUB -> "−"
-        Op.MUL -> "×"
-        Op.DIV -> "÷"
+        lastExpr = null
+        showEquals = false
     }
 
     fun applyOp(op: Op) {
         try {
             val current = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
             val acc = accumulator
-
-            // Affichage lisible de l’expression
-            expr = if (acc == null) {
-                "${getDisplayText()} ${opSymbol(op)}"
-            } else {
-                val left = (accumulator ?: current).stripTrailingZeros().toPlainString().replace('.', ',')
-                "$left ${opSymbol(op)}"
-            }
 
             if (acc == null) {
                 accumulator = current
@@ -179,11 +207,13 @@ private fun CalculatorScreen(
             }
             pendingOp = op
             resetOnNextDigit = true
+            lastExpr = null; showEquals = false
         } catch (_: Throwable) {
             setDisplayText("Error")
             accumulator = null
             pendingOp = null
             resetOnNextDigit = true
+            lastExpr = null; showEquals = false
         }
     }
 
@@ -193,7 +223,12 @@ private fun CalculatorScreen(
             val acc = accumulator
             val op = pendingOp
             if (acc != null && op != null) {
-                expr = "${acc.stripTrailingZeros().toPlainString().replace('.', ',')} ${opSymbol(op)} ${getDisplayText()}"
+                // fige l’expression pour l’affichage
+                val left = acc.stripTrailingZeros().toPlainString().replace('.', ',')
+                val right = prettyText(getDisplayText())
+                lastExpr = "$left ${opSymbol(op)} $right"
+
+                // calcule le résultat
                 val result = when (op) {
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
@@ -201,16 +236,19 @@ private fun CalculatorScreen(
                     Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
                 }
                 setDisplayText(formatForDisplay(result))
-                expr = "$expr ="
+
+                // reset moteur, conserve l’expression
                 accumulator = null
                 pendingOp = null
                 resetOnNextDigit = true
+                showEquals = true
             }
         } catch (_: Throwable) {
             setDisplayText("Error")
             accumulator = null
             pendingOp = null
             resetOnNextDigit = true
+            lastExpr = null; showEquals = false
         }
     }
 
@@ -222,7 +260,7 @@ private fun CalculatorScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        // Afficheur : expression + résultat (tailles raisonnables)
+        // Afficheur : expression (ligne 1) + résultat (ligne 2)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -232,16 +270,17 @@ private fun CalculatorScreen(
         ) {
             Column(Modifier.fillMaxWidth()) {
                 Text(
-                    text = expr,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    text = expressionLine(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.90f),
                     style = MaterialTheme.typography.headlineLarge,
                     maxLines = 1,
                     textAlign = TextAlign.End,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(4.dp))
+                val preview = previewResultOrEmpty()
                 Text(
-                    text = getDisplayText(),
+                    text = if (preview.isNotEmpty()) preview else getDisplayText(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                     style = MaterialTheme.typography.headlineMedium,
                     maxLines = 1,
@@ -255,9 +294,7 @@ private fun CalculatorScreen(
 
         if (!isLandscape) {
             /* ======== PORTRAIT ======== */
-            CalcRow {
-                MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
-            }
+            CalcRow { MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR") }
             CalcRow {
                 FuncKey("C") { clearAll() }
                 OpKey("÷") { applyOp(Op.DIV) }
@@ -267,35 +304,25 @@ private fun CalculatorScreen(
             CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
             CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
 
-            // 🔁 Remplacement des 2 dernières rangées par :
-            // - à gauche : deux lignes (1 2 3) et (0 large, .)
-            // - à droite : un "=" TALL qui occupe la hauteur des 2 lignes
+            // Deux dernières rangées fusionnées : "=" sur 2 lignes
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = spacedBy(8.dp)
             ) {
-                // Bloc gauche (2 lignes)
                 Column(
                     modifier = Modifier.weight(3f),
                     verticalArrangement = spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = spacedBy(8.dp)
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(8.dp)) {
                         DigitKey("1") { inputDigit("1") }
                         DigitKey("2") { inputDigit("2") }
                         DigitKey("3") { inputDigit("3") }
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = spacedBy(8.dp)
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(8.dp)) {
                         BigDigitKey("0") { inputDigit("0") }
                         DigitKey(".") { inputDot() }
                     }
                 }
-                // "=" sur 2 lignes
                 EqualKeyTall(
                     modifier = Modifier.weight(1f),
                     onTap = { equalsNormal() },
@@ -342,6 +369,7 @@ private fun CalculatorScreen(
                     val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
                     setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
                     resetOnNextDigit = true
+                    lastExpr = null; showEquals = false
                 }
                 BigDigitKey("0") { inputDigit("0") }
                 DigitKey(".") { inputDot() }
@@ -446,7 +474,7 @@ private fun KeyBase(
     }
 }
 
-/** "=" sur 2 lignes (hauteur = 2 touches + l'espacement intermédiaire) */
+/** "=" sur 2 lignes (hauteur = 2 touches + l’espacement) */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable private fun EqualKeyTall(
     modifier: Modifier = Modifier,
