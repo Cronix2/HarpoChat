@@ -1,25 +1,31 @@
 package com.example.harpochat.calculator
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.example.harpochat.MainActivity
+import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
 import java.math.BigDecimal
 import java.math.MathContext
@@ -31,22 +37,21 @@ class CalculatorActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Anti-screenshot (recommandé)
+        // Anti-screenshot
         window.setFlags(
             android.view.WindowManager.LayoutParams.FLAG_SECURE,
             android.view.WindowManager.LayoutParams.FLAG_SECURE
         )
 
         val prefs = SecureStore.prefs(this)
-        // Secret PIN par défaut = 1234
-        if (!prefs.contains(KEY_SECRET_PIN)) prefs.edit { putString(KEY_SECRET_PIN, "52741") }
+        if (!prefs.contains(KEY_SECRET_PIN)) prefs.edit { putString(KEY_SECRET_PIN, "527418") }
         if (!prefs.contains(KEY_DURESS_PIN)) prefs.edit { putString(KEY_DURESS_PIN, "1234") }
 
         setContent {
-            MaterialTheme {
-                Surface {
+            DarkCalcTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
                     CalculatorScreen(
-                        onUnlock = { startActivity(Intent(this, MainActivity::class.java)) },
+                        onUnlock = { startActivity(Intent(this, ConversationsActivity::class.java)) },
                         onDuress = {
                             prefs.edit { clear() }
                             Toast.makeText(this, "Memory cleared", Toast.LENGTH_SHORT).show()
@@ -82,8 +87,12 @@ private fun CalculatorScreen(
     onDuress: () -> Unit,
     validatePins: (String) -> PinResult
 ) {
-    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val ctx = LocalContext.current
 
+    // --- état calculatrice
     var display by remember { mutableStateOf(TextFieldValue("0")) }
     var accumulator by remember { mutableStateOf<BigDecimal?>(null) }
     var pendingOp by remember { mutableStateOf<Op?>(null) }
@@ -93,7 +102,6 @@ private fun CalculatorScreen(
     fun setDisplayText(s: String) { display = TextFieldValue(s) }
     fun getDisplayText(): String = display.text
 
-    // 👉 pas de 0 inutile en tête : "0" + "5" -> "5", "0" + "0" -> "0"
     fun inputDigit(d: String) {
         val cur = getDisplayText()
         val next = when {
@@ -129,8 +137,7 @@ private fun CalculatorScreen(
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
                     Op.MUL -> acc.multiply(current, mc)
-                    Op.DIV -> if (current.compareTo(BigDecimal.ZERO) == 0) BigDecimal.ZERO
-                    else acc.divide(current, mc)
+                    Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
                     null   -> acc
                 }
                 accumulator = result
@@ -156,8 +163,7 @@ private fun CalculatorScreen(
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
                     Op.MUL -> acc.multiply(current, mc)
-                    Op.DIV -> if (current.compareTo(BigDecimal.ZERO) == 0) BigDecimal.ZERO
-                    else acc.divide(current, mc)
+                    Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
                 }
                 setDisplayText(result.toPlainString().trimEndZeros())
                 accumulator = null
@@ -172,114 +178,223 @@ private fun CalculatorScreen(
         }
     }
 
+    // --- UI
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.End
     ) {
-        // Afficheur (lecture seule)
-        OutlinedTextField(
-            value = display,
-            onValueChange = { /* read-only */ },
+        // bandeau résultat
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
-            readOnly = true,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.displayMedium.copy(
+                .weight(1f)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .padding(16.dp)
+        ) {
+            Text(
+                text = getDisplayText(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.End,
-                fontWeight = FontWeight.SemiBold
-            ),
-            label = { Text("Calculator") }
-        )
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+        }
 
         Spacer(Modifier.height(12.dp))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CalcButton("C", Modifier.weight(1f)) { clearAll() }
-            CalcButton("%", Modifier.weight(1f)) {
-                val v = getDisplayText().toBigDecimalOrNull() ?: BigDecimal.ZERO
-                setDisplayText(v.divide(BigDecimal(100), mc).toPlainString().trimEndZeros())
-                resetOnNextDigit = true
+        // Clavier – portrait simple / paysage scientifique
+        if (!isLandscape) {
+            // PORTRAIT (simple)
+            CalcRow {
+                MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
             }
-            CalcButton("+", Modifier.weight(1f)) { applyOp(Op.ADD) }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CalcButton("7", Modifier.weight(1f)) { inputDigit("7") }
-            CalcButton("8", Modifier.weight(1f)) { inputDigit("8") }
-            CalcButton("9", Modifier.weight(1f)) { inputDigit("9") }
-            CalcButton("×", Modifier.weight(1f)) { applyOp(Op.MUL) }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CalcButton("4", Modifier.weight(1f)) { inputDigit("4") }
-            CalcButton("5", Modifier.weight(1f)) { inputDigit("5") }
-            CalcButton("6", Modifier.weight(1f)) { inputDigit("6") }
-            CalcButton("−", Modifier.weight(1f)) { applyOp(Op.SUB) }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CalcButton("1", Modifier.weight(1f)) { inputDigit("1") }
-            CalcButton("2", Modifier.weight(1f)) { inputDigit("2") }
-            CalcButton("3", Modifier.weight(1f)) { inputDigit("3") }
-            CalcButton("÷", Modifier.weight(1f)) { applyOp(Op.DIV) }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        // Ligne finale (0, ., =)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CalcButton("0", Modifier.weight(2f)) { inputDigit("0") }
-            CalcButton(".", Modifier.weight(1f)) { inputDot() }
-
-            // "=" : tap = calcul ; long-press = secret/duress
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp)
-                    .combinedClickable(
-                        onClick = { equalsNormal() },
-                        onLongClick = {
-                            when (validatePins(getDisplayText().trim())) {
-                                PinResult.SECRET -> onUnlock()
-                                PinResult.DURESS -> onDuress()
-                                PinResult.NO_MATCH -> { /* façade seulement */ }
-                            }
+            CalcRow {
+                FuncKey("C") { clearAll() }
+                OpKey("÷") { applyOp(Op.DIV) }
+                FuncKey("×") { applyOp(Op.MUL) }
+                FuncKey("⌫") { setDisplayText(getDisplayText().dropLast(1).ifEmpty { "0" }) }
+            }
+            CalcRow { DigitKey("7") { inputDigit("7") }; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
+            CalcRow { DigitKey("4") { inputDigit("4") }; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
+            CalcRow { DigitKey("1") { inputDigit("1") }; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")};
+                // "=" surface : tap = calcul, long-press = secret/duress
+                EqualKey(
+                    onTap = { equalsNormal() },
+                    onLong = {
+                        when (validatePins(getDisplayText().trim())) {
+                            PinResult.SECRET -> onUnlock()
+                            PinResult.DURESS -> onDuress()
+                            PinResult.NO_MATCH -> {}
                         }
-                    ),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                tonalElevation = 2.dp,
-                shadowElevation = 2.dp
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        "=",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    }
+                )
+            }
+            CalcRow {
+                // 0 large, point, virgule
+                BigDigitKey("0") { inputDigit("0") }
+                DigitKey(".") { inputDot() }
+                DigitKey(",") { /* séparateur visuel (placeholder) */ }
+            }
+        } else {
+            // LANDSCAPE (scientifique – placeholder des fonctions)
+            Text("Deg", color = MaterialTheme.colorScheme.onBackground, modifier = Modifier
+                .padding(bottom = 8.dp)
+                .align(Alignment.Start))
+            val left = listOf("(", ")", "1/x", "MC", "M+", "M-", "MR")
+            val second = listOf("x²", "x³", "C", "÷", "×", "⌫")
+            val third = listOf("7", "8", "9", "−")
+            val fourth = listOf("4", "5", "6", "+")
+            val fifth = listOf("1", "2", "3", "=")
+            val sixth = listOf("%", "0", ",")
+
+            // 1ère ligne
+            CalcRow {
+                left.forEach { label ->
+                    when (label) {
+                        "C" -> FuncKey("C") { clearAll() }
+                        "÷" -> OpKey("÷") { applyOp(Op.DIV) }
+                        "×" -> OpKey("×") { applyOp(Op.MUL) }
+                        "⌫" -> FuncKey("⌫") { setDisplayText(getDisplayText().dropLast(1).ifEmpty { "0" }) }
+                        else -> MemKey(label) // placeholders
+                    }
                 }
             }
+            CalcRow {
+                second.forEach { l ->
+                    when (l) {
+                        "C" -> FuncKey("C") { clearAll() }
+                        "÷" -> OpKey("÷") { applyOp(Op.DIV) }
+                        "×" -> OpKey("×") { applyOp(Op.MUL) }
+                        "⌫" -> FuncKey("⌫") { setDisplayText(getDisplayText().dropLast(1).ifEmpty { "0" }) }
+                        else -> FuncKey(l) { /* TODO scientific */ }
+                    }
+                }
+            }
+            CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
+            CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
+            CalcRow {
+                DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
+                EqualKey(
+                    onTap = { equalsNormal() },
+                    onLong = {
+                        when (validatePins(getDisplayText().trim())) {
+                            PinResult.SECRET -> onUnlock()
+                            PinResult.DURESS -> onDuress()
+                            PinResult.NO_MATCH -> {}
+                        }
+                    }
+                )
+            }
+            CalcRow {
+                FuncKey("%") { // x% = x/100
+                    val v = getDisplayText().toBigDecimalOrNull() ?: BigDecimal.ZERO
+                    setDisplayText(v.divide(BigDecimal(100), mc).toPlainString().trimEndZeros())
+                    resetOnNextDigit = true
+                }
+                BigDigitKey("0") { inputDigit("0") }
+                DigitKey(",") { /* placeholder */ }
+            }
+        }
+    }
+}
+
+@Composable private fun CalcRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        content = content
+    )
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable private fun KeyBase(
+    label: String,
+    modifier: Modifier = Modifier,
+    container: Color = MaterialTheme.colorScheme.surfaceVariant,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.height(56.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = container,
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+        onClick = onClick
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun CalcButton(
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    ElevatedButton(onClick = onClick, modifier = modifier.height(56.dp)) {
-        Text(label, style = MaterialTheme.typography.titleLarge)
+private fun RowScope.DigitKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier.weight(1f), onClick = onClick)
+
+@Composable
+private fun RowScope.BigDigitKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier.weight(2f), onClick = onClick)
+
+@Composable
+private fun RowScope.OpKey(label: String, onClick: () -> Unit) =
+    KeyBase(
+        label,
+        modifier = Modifier.weight(1f),
+        container = MaterialTheme.colorScheme.tertiaryContainer,
+        onClick = onClick
+    )
+
+@Composable
+private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier.weight(1f), onClick = onClick)
+
+@Composable
+private fun RowScope.MemKey(label: String) =
+    KeyBase(label, modifier = Modifier.weight(1f), onClick = { /* TODO */ })
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .weight(1f)
+            .height(56.dp)
+            .combinedClickable(onClick = onTap, onLongClick = onLong),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        }
     }
 }
+
 
 private fun String.trimEndZeros(): String =
     try {
         val s = this.toBigDecimal().stripTrailingZeros().toPlainString()
         if (s == "-0") "0" else s
     } catch (_: Throwable) { this }
+
+
+@Composable
+private fun DarkCalcTheme(content: @Composable () -> Unit) {
+    val dark = darkColorScheme(
+        primary = Color(0xFF4C6FFF),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFF2A2F3A),
+        onPrimaryContainer = Color.White,
+        secondary = Color(0xFF8C96A7),
+        tertiaryContainer = Color(0xFF3A404D),
+        background = Color(0xFF0F1115),
+        onBackground = Color(0xFFE7EAF1),
+        surfaceVariant = Color(0xFF1A1F27),
+        onSurfaceVariant = Color(0xFFD8DDE6)
+    )
+    MaterialTheme(colorScheme = dark, typography = Typography(), content = content)
+}

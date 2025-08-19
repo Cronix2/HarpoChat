@@ -9,6 +9,8 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="false">
 
+        <activity android:name=".messaging.ConversationsActivity" />
+
         <!-- Façade calculatrice : écran visible au lancement -->
         <activity
             android:name=".calculator.CalculatorActivity"
