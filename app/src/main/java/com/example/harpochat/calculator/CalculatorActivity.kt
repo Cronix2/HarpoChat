@@ -9,6 +9,14 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -34,6 +42,7 @@ import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 /* =========================
  *  Activité Calculatrice
@@ -99,8 +108,10 @@ private fun CalculatorScreen(
     validatePins: (String) -> PinResult
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var justDidEquals by remember { mutableStateOf(false) }
 
-    // Affichage (texte saisi dans l’écran)
+
+    // Affichage (texte saisi)
     var display by remember { mutableStateOf(TextFieldValue("0")) }
 
     // Moteur
@@ -109,13 +120,14 @@ private fun CalculatorScreen(
     var resetOnNextDigit by remember { mutableStateOf(false) }
     val mc = remember { MathContext(16, RoundingMode.HALF_UP) }
 
-    // Nouveaux états pour l’affichage "vidéo 2"
-    var lastExpr by remember { mutableStateOf<String?>(null) }   // ex : "7 + 9"
-    var showEquals by remember { mutableStateOf(false) }         // si true => "7 + 9 =" sur la 1re ligne
+    // Pour afficher temporairement l'expression avant "="
+    var lastExpr by remember { mutableStateOf<String?>(null) }
+    var showEquals by remember { mutableStateOf(false) }
 
+    // utils
     fun setDisplayText(s: String) { display = TextFieldValue(s) }
     fun getDisplayText(): String = display.text
-    fun prettyText(s: String): String = s.replace('.', ',')
+    fun prettyText(s: String) = s.replace('.', ',')
 
     fun opSymbol(op: Op) = when (op) {
         Op.ADD -> "+"
@@ -124,25 +136,37 @@ private fun CalculatorScreen(
         Op.DIV -> "÷"
     }
 
+
     /** Construit la ligne d’expression (ligne du haut) */
+    // Construit la ligne d’expression
     fun expressionLine(): String {
         val cur = prettyText(getDisplayText())
-        return when {
-            showEquals && lastExpr != null -> "${lastExpr} ="
-            pendingOp != null && accumulator != null -> {
-                val left = accumulator!!.stripTrailingZeros().toPlainString().replace('.', ',')
+        return if (pendingOp != null && accumulator != null) {
+            val left = accumulator!!.stripTrailingZeros().toPlainString().replace('.', ',')
+            if (resetOnNextDigit) {
+                "$left ${opSymbol(pendingOp!!)}"   // on attend le 2e opérande → pas de 'cur'
+            } else {
                 "$left ${opSymbol(pendingOp!!)} $cur"
             }
-            else -> cur
+        } else {
+            cur
         }
     }
 
+
+
+
     /** Aperçu du résultat (ligne du bas) tant que l’expression est complète */
+    // Renvoie l’aperçu du résultat uniquement si acc + op + second opérande sont présents
     fun previewResultOrEmpty(): String {
-        if (showEquals) return ""
         val acc = accumulator ?: return ""
-        val op = pendingOp ?: return ""
-        val right = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: return ""
+        val op  = pendingOp   ?: return ""
+        // second opérande doit exister (et ne pas être simplement "0" parce qu’on n’a rien saisi)
+        val rightTxt = getDisplayText()
+        val right = rightTxt.replace(',', '.').toBigDecimalOrNull() ?: return ""
+        // si resetOnNextDigit est encore vrai, on n’a pas commencé le deuxième opérande
+        if (resetOnNextDigit) return ""
+
         val result = when (op) {
             Op.ADD -> acc.add(right, mc)
             Op.SUB -> acc.subtract(right, mc)
@@ -152,11 +176,11 @@ private fun CalculatorScreen(
         return formatForDisplay(result)
     }
 
+
     fun backspace() {
         val cur = getDisplayText()
         val next = if (cur.length <= 1) "0" else cur.dropLast(1)
         setDisplayText(next)
-        lastExpr = null; showEquals = false
     }
 
     fun inputDigit(d: String) {
@@ -169,13 +193,11 @@ private fun CalculatorScreen(
         }
         setDisplayText(next)
         resetOnNextDigit = false
-        lastExpr = null; showEquals = false
     }
 
     fun inputDot() {
         val cur = getDisplayText()
         if (!cur.contains(".")) setDisplayText(cur + ".")
-        lastExpr = null; showEquals = false
     }
 
     fun clearAll() {
@@ -193,8 +215,10 @@ private fun CalculatorScreen(
             val acc = accumulator
 
             if (acc == null) {
+                // premier opérande
                 accumulator = current
             } else if (pendingOp != null) {
+                // évalue acc (op) current pour chaînage
                 val result = when (pendingOp) {
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
@@ -207,13 +231,11 @@ private fun CalculatorScreen(
             }
             pendingOp = op
             resetOnNextDigit = true
-            lastExpr = null; showEquals = false
         } catch (_: Throwable) {
             setDisplayText("Error")
             accumulator = null
             pendingOp = null
             resetOnNextDigit = true
-            lastExpr = null; showEquals = false
         }
     }
 
@@ -222,35 +244,37 @@ private fun CalculatorScreen(
             val current = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
             val acc = accumulator
             val op = pendingOp
-            if (acc != null && op != null) {
-                // fige l’expression pour l’affichage
-                val left = acc.stripTrailingZeros().toPlainString().replace('.', ',')
-                val right = prettyText(getDisplayText())
-                lastExpr = "$left ${opSymbol(op)} $right"
 
-                // calcule le résultat
+            // Était-on dans un état "calcul possible" ? (acc + op + second opérande)
+            val canCompute = acc != null && op != null && !resetOnNextDigit
+
+            if (acc != null && op != null) {
                 val result = when (op) {
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
                     Op.MUL -> acc.multiply(current, mc)
                     Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
                 }
+                // le résultat devient la nouvelle "entrée"
                 setDisplayText(formatForDisplay(result))
-
-                // reset moteur, conserve l’expression
                 accumulator = null
                 pendingOp = null
-                resetOnNextDigit = true
-                showEquals = true
+                resetOnNextDigit = false
+
+                // N’arme l’animation que si un résultat était réellement affichable
+                if (canCompute) {
+                    justDidEquals = true
+                }
             }
         } catch (_: Throwable) {
             setDisplayText("Error")
             accumulator = null
             pendingOp = null
             resetOnNextDigit = true
-            lastExpr = null; showEquals = false
         }
     }
+
+
 
     /* ---------- UI ---------- */
     Column(
@@ -269,24 +293,61 @@ private fun CalculatorScreen(
                 .padding(16.dp)
         ) {
             Column(Modifier.fillMaxWidth()) {
-                Text(
-                    text = expressionLine(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.90f),
-                    style = MaterialTheme.typography.headlineLarge,
-                    maxLines = 1,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                val exprTop = if (showEquals && lastExpr != null) lastExpr!! else expressionLine()
+
+                // Ligne 1 : expression / résultat
+                AnimatedContent(
+                    targetState = expressionLine(),
+                    transitionSpec = {
+                        if (justDidEquals) {
+                            slideInVertically(animationSpec = tween(180)) { h -> +h } togetherWith
+                                    slideOutVertically(animationSpec = tween(180)) { h -> -h }
+                        } else {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        }
+                    },
+                    label = "expr-anim"
+                ) { text ->
+                    Text(
+                        text = text,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.90f),
+                        style = MaterialTheme.typography.headlineLarge,
+                        maxLines = 1,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 Spacer(Modifier.height(4.dp))
+
+                // Ligne 2 : prévisualisation (vide => disparaît)
                 val preview = previewResultOrEmpty()
-                Text(
-                    text = if (preview.isNotEmpty()) preview else getDisplayText(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.headlineMedium,
-                    maxLines = 1,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                AnimatedContent(
+                    targetState = preview,
+                    transitionSpec = {
+                        if (justDidEquals) {
+                            slideInVertically(animationSpec = tween(160)) { h -> +h } togetherWith
+                                    slideOutVertically(animationSpec = tween(160)) { h -> -h }
+                        } else {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        }
+                    },
+                    label = "preview-anim"
+                ) { txt ->
+                    if (txt.isNotEmpty()) {
+                        Text(
+                            text = txt,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            style = MaterialTheme.typography.headlineMedium,
+                            maxLines = 1,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Spacer(Modifier.height(0.dp))
+                    }
+                }
+
             }
         }
 
@@ -383,6 +444,13 @@ private fun CalculatorScreen(
             }
         }
     }
+    LaunchedEffect(justDidEquals) {
+        if (justDidEquals) {
+            delay(200)   // un chouïa > aux tweens (180 ms)
+            justDidEquals = false
+        }
+    }
+
 }
 
 /* =============== Composants de touches =============== */
@@ -517,6 +585,8 @@ private fun formatForDisplay(bd: BigDecimal): String {
         bd.stripTrailingZeros().toPlainString().replace('.', ',')
     }
 }
+
+
 
 /* Petit thème sombre cohérent */
 @Composable
