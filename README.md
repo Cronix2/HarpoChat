@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="app\assets\logo.png" align="center" width="30%">
+    <img src="app/assets/logo.png" align="center" width="30%">
 </p>
 
 <p align="center">
@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-    <em><code>❯ Experimental encrypted chat application built with Kotlin, Jetpack Compose, and the Signal Protocol</code></em>
+    <em><code>❯ Discreet end‑to‑end encrypted chat disguised as a calculator</code></em>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-        <em>Developed with the tools below.</em>
+    <em>Developed with the tools below.</em>
 </p>
 
 <p align="center">
@@ -35,6 +35,7 @@
 
 - [🔗 Table of Contents](#-table-of-contents)
 - [📍 Overview](#-overview)
+- [🧙 Name Origin](#-name-origin)
 - [👾 Features](#-features)
 - [📁 Project Structure](#-project-structure)
 - [🚀 Getting Started](#-getting-started)
@@ -50,29 +51,25 @@
 
 ## 📍 Overview
 
-**HarpoChat** is an experimental Android chat application built in **Kotlin** and **Jetpack Compose**.  It demonstrates how to integrate true **end‑to‑end encryption (E2EE)** using the open‑source [Signal Protocol](https://signal.org/docs/), while keeping the rest of the stack simple.  Messages are composed in a Compose UI, encrypted on the sender device, decrypted on a simulated peer, and displayed in plain text.  The project uses **Kotlin coroutines** and **StateFlow** to reactively update the UI.  A secure local store based on Android’s `EncryptedSharedPreferences` provides a safe place for keys and other sensitive values.  This proof‑of‑concept is a starting point for building secure messaging apps and illustrates how to wire together encryption, data flows and modern Android UI components.
+**HarpoChat** is a demonstration Android application that combines a modern **encrypted messenger** with a **fully‑featured calculator facade**.  The app launches as a convincing calculator; only by entering a pre‑configured secret PIN does the secure chat reveal itself.  A secondary *duress* PIN instantly wipes the secure store.  Behind the façade lies a Compose‑based chat UI backed by the open‑source **Signal Protocol** for true end‑to‑end encryption.  The project illustrates how to meld encryption, reactive data flows and Jetpack Compose into a seamless, security‑focused experience.  It is intended for educational purposes and is not yet production ready.
 
-Key components include:
+---
 
-- A **Jetpack Compose** UI with a `LazyColumn` chat log and input bar.
-- A `ChatRepository` that tracks messages and invokes the encryption engine.
-- A pluggable **CryptoEngine** interface with a `SignalCryptoEngine` implementation based on the **signal-protocol-java** library.
-- A `SecureStore` wrapper around `EncryptedSharedPreferences` and `MasterKey` for storing secrets.
-- Gradle build scripts targeting **SDK 36**, with Kotlin 17 and Compose enabled.
+## 🧙 Name Origin
 
-This repository currently contains only a single commit that integrates the Signal encryption engine and associated dependencies.  As such it should be regarded as a minimal demonstration rather than a production‑ready chat system.
+The name **HarpoChat** pays homage to **Harpocrates**, the Hellenistic god of silence and secrets.  In Greek mythology, Harpocrates was adapted from the Egyptian child‑god **Horus**.  Greeks and Romans saw statues of the boy Horus with his finger to his mouth and misinterpreted the pose as a command for secrecy.  As a result, Harpocrates became known as the deity of silence, secrets and confidentiality.  Naming the project after Harpocrates underscores its goal: keeping conversations hidden and private.
 
 ---
 
 ## 👾 Features
 
-- ✅ **End‑to‑End Encryption** – messages are encrypted on the sender and decrypted on the receiver using the Signal Protocol.
-- 📱 **Jetpack Compose UI** – simple, reactive chat interface implemented with Compose’s `LazyColumn`, `ElevatedCard` and Material3 components.
-- 🔄 **Reactive State** – messages are exposed as a Kotlin **StateFlow** and collected in the UI to update automatically.
-- 🔐 **Secure Key Storage** – secrets are persisted using `EncryptedSharedPreferences` with a generated `MasterKey`.
-- ⚡ **Kotlin Coroutines** – background work (encryption, decryption) runs off the main thread, keeping the UI responsive.
-- 🔌 **Signal Protocol Integration** – uses the `signal-protocol-java` library to generate identities, prekeys, sessions and encrypt/decrypt messages.
-- 🧰 **Gradle & Kotlin DSL** – configured via `build.gradle.kts` with Compose enabled and dependencies declared in a version catalog.
+- 🔐 **Discreet Calculator Interface** – the application launches into a complete calculator.  It includes basic operations, memory functions (MC, M+, M-, MR), a two‑line display with expression preview and animated transitions.  A secret PIN unlocks the chat, while a duress PIN clears the secure preferences and displays a “Memory cleared” toast.
+- 📱 **Orientation‑Aware UI** – the calculator adapts its layout for portrait and landscape orientations and uses Compose’s `AnimatedContent` for smooth expression/result updates.
+- 🗨️ **Conversation List** – after unlocking, users see a list of conversation previews with names, last messages, timestamps and unread counts.  A top app bar provides access to settings, and a floating action button hints at creating new conversations.
+- 💬 **Secure Messaging** – conversations use a Compose chat screen and a `ChatRepository` that encrypts messages with the **Signal Protocol**.  Messages are encrypted on send, decrypted on receipt and displayed with the ciphertext length.
+- 💾 **Secure Key Storage** – secret values such as the calculator PINs and Signal keys are stored in Android’s `EncryptedSharedPreferences` using a generated `MasterKey`.
+- 🔄 **Reactive State** – the app relies on Kotlin Coroutines and `StateFlow` to expose message and conversation updates, automatically updating the UI.
+- 🛠️ **Modular Architecture** – the codebase is organised into packages such as `calculator`, `messaging`, `crypto`, `data`, `security` and `ui`, promoting separation of concerns.
 
 ---
 
@@ -84,36 +81,34 @@ HarpoChat/
 ├── README.md
 ├── build.gradle.kts
 ├── gradle.properties
-├── settings.gradle.kts
-├── gradlew
-├── gradlew.bat
-├── gradle/
-│   └── … (wrapper and version catalog files)
+├── gradle/            # Wrapper and version catalog
+├── gradlew / gradlew.bat
 └── app/
-    ├── build.gradle.kts          # Module-level Gradle script
-    ├── proguard-rules.pro        # ProGuard rules (currently empty)
+    ├── build.gradle.kts       # Module‑level Gradle script
+    ├── proguard-rules.pro
     └── src/
         ├── main/
-        │   ├── AndroidManifest.xml
+        │   ├── AndroidManifest.xml       # Defines launcher as CalculatorActivity
         │   ├── java/com/example/harpochat/
-        │   │   ├── MainActivity.kt           # Entry point; wires ViewModel & Compose
+        │   │   ├── MainActivity.kt           # Chat screen using Compose
+        │   │   ├── calculator/
+        │   │   │   └── CalculatorActivity.kt  # Disguised calculator with PIN logic
+        │   │   ├── messaging/
+        │   │   │   └── ConversationsActivity.kt  # Conversation list UI
         │   │   ├── crypto/
-        │   │   │   ├── CryptoEngine.kt       # Interface + Fake implementation
-        │   │   │   ├── SignalCryptoEngine.kt # Signal-based engine
-        │   │   │   └── SignalStores.kt       # Key generation & stores
+        │   │   │   ├── CryptoEngine.kt        # Interface & fake engine
+        │   │   │   ├── SignalCryptoEngine.kt  # Signal Protocol implementation
+        │   │   │   └── SignalStores.kt        # Key generation & stores
         │   │   ├── data/
-        │   │   │   └── ChatRepository.kt      # Holds messages and performs E2EE
+        │   │   │   └── ChatRepository.kt      # Handles E2EE and message flow
         │   │   ├── security/
-        │   │   │   └── SecureStore.kt         # Secure SharedPreferences wrapper
+        │   │   │   └── SecureStore.kt         # EncryptedSharedPreferences wrapper
         │   │   └── ui/
-        │   │       ├── ChatScreen.kt          # Compose UI and ChatMessage model
-        │   │       ├── ChatViewModel.kt       # Exposes messages & send()
-        │   │       └── theme/
-        │   │           ├── Color.kt
-        │   │           ├── Theme.kt
-        │   │           └── Type.kt
-        │   └── res/                            # Application resources
-        ├── test/                              # Unit tests (currently empty)
+        │   │       ├── ChatScreen.kt          # Compose chat UI
+        │   │       ├── ChatViewModel.kt       # Exposes messages via StateFlow
+        │   │       └── theme/                 # Material theme definitions
+        │   └── res/                           # Application resources
+        ├── test/                              # Unit tests (empty)
         └── androidTest/                       # Instrumentation tests (empty)
 ```
 
@@ -123,16 +118,16 @@ HarpoChat/
 
 ### ☑️ Prerequisites
 
-To build and run HarpoChat you will need:
+To build and run **HarpoChat** you will need:
 
 - **JDK 17** – the project targets Java 17.
-- **Android Studio** (Hedgehog or later) or the command‑line **Gradle** wrapper.
-- An installed **Android SDK**; `compileSdk` is set to 36 and `minSdk` to 26.
-- A device or emulator running Android 8.0 (API 26) or higher.
+- **Android Studio Hedgehog** or later, or the command‑line Gradle wrapper.
+- **Android SDK** – `compileSdk` is set to 36 and `minSdk` to 26.
+- An emulator or device running **Android 8.0** (API 26) or higher.
 
 ### ⚙️ Installation
 
-Clone this repository:
+Clone the repository:
 
 ```sh
 git clone https://github.com/Cronix2/HarpoChat.git
@@ -145,42 +140,43 @@ Open the project in Android Studio and let it download dependencies, or build fr
 ./gradlew assembleDebug
 ```
 
-The `assembleDebug` task will compile the app and produce an APK in `app/build/outputs/apk/debug/`.
+The APK will be produced in `app/build/outputs/apk/debug/`.
 
 ### 🤖 Usage
 
-Run the app on an emulator or physical device (API 26+).  You will be presented with a simple chat screen.  Type a message in the text field and press **Envoyer**.  The `ChatRepository` will:
+Run the app on an emulator or physical device.  You will see a dark‑themed calculator with a two‑line display, memory buttons and basic operators.  To access the hidden chat:
 
-1. Encrypt the plaintext using the Signal engine, generating a ciphertext.
-2. Decrypt the ciphertext on a simulated peer to obtain the original message.
-3. Update the `messages` flow, causing the UI to display both your sent message and an echo with the size of the encrypted payload.
+1. **Enter your secret PIN** using the calculator keys.  On the first launch default values are `527418` for the secret pin and `1234` for the duress pin.  The secret pin triggers the `onUnlock` callback which navigates to the conversation list.
+2. **Enter the duress PIN** to immediately clear the secure preferences (erasing your stored keys and messages) and show a “Memory cleared” toast.
+3. Once unlocked, select a conversation or create a new one (TODO).  Messages you send are encrypted using the Signal engine, decrypted in a loopback for demonstration and displayed alongside the byte length of the ciphertext.
+4. Press the back button to return to the calculator façade.
 
-Currently HarpoChat operates entirely in memory and on one device (a “loopback” demo).  No network communication or persistent storage beyond the cryptographic identity is included.
+No real network communication is implemented yet; both peers are simulated within the app.  Likewise, conversation creation and settings screens are placeholders to be expanded.
 
 ---
 
 ## 🧪 Future Testing
 
-HarpoChat is a prototype, and **no automated tests are currently implemented**.  Future work could include:
+Automated tests are not currently implemented.  Potential future tests could include:
 
-- Unit tests for encryption/decryption routines and message formatting.
-- Instrumentation tests to verify Compose UI behaviour and ViewModel lifecycles.
-- UI tests using Espresso or Compose Test Kit.
+- Unit tests for arithmetic logic, PIN validation and encryption/decryption routines.
+- Instrumentation tests to verify navigation between calculator, conversation list and chat screens.
+- UI tests using Espresso or Compose Test Kit for verifying the calculator layout and chat interactions.
 
 ---
 
 ## 📌 Project Roadmap
 
-This project is at an early stage.  Ideas for future improvements include:
+The project is actively evolving.  Planned or potential enhancements include:
 
-- **Real networking** – integrate a server or peer‑to‑peer transport so that messages are exchanged between multiple devices rather than looped back locally.
-- **User accounts & authentication** – allow users to register, exchange prekeys and manage contacts.
-- **Persistent storage** – store chat history securely using a local database (e.g. Room) instead of keeping messages in memory.
-- **Group chats & attachments** – support sending media, files and group conversations.
-- **Improved UI/UX** – refine the Compose UI, add dark mode, message bubbles, avatars and notification support.
-- **Key management** – integrate secure backup/restore of identity keys and optional biometric unlock.
+- **Real networking** – implement a back‑end or peer‑to‑peer transport so that messages are exchanged between devices instead of looped back locally.
+- **User management** – support user accounts, contact lists and key exchanges.
+- **Persistent chat history** – store conversations securely (e.g. with Room) instead of keeping messages in memory.
+- **Configurable PINs & themes** – settings screen to change the secret/duress codes and personalise appearance.
+- **Conversation creation & group chats** – allow users to start new conversations, add participants and share media.
+- **Enhanced calculator** – extend operations (percentage, square root), improve animations and adapt for tablets.
 
-Contributions or suggestions for additional features are welcome!  See the section below for details on how to help.
+Contributions and feature requests are welcome!
 
 ---
 
@@ -216,14 +212,14 @@ Contributions are very welcome!  To contribute:
 
 6. **Open a Pull Request** describing your changes and why they should be merged.
 
-Please follow the existing code style and include tests where relevant.  For major changes, please open an issue first to discuss what you would like to change.
+Please follow the existing code style and include tests where relevant.  For major changes, open an issue first to discuss the proposal.
 
 ---
 
 ## 🎗 License
 
-This project is licensed under the **MIT License**.  See the [LICENSE](./LICENSE) file for more details.
+This project is licensed under the **MIT License**.  See the [LICENSE](./LICENSE) file for details.
 
 ---
 
-🚀 **Thank you for exploring HarpoChat!**  If this project inspires you to build secure messaging experiences or if you learn something useful, consider starring the repository and sharing your feedback.
+🚀 **Thank you for exploring HarpoChat!**  If this project inspires you to build privacy‑focused communication tools or you learn something useful, consider starring the repository and sharing your feedback.
