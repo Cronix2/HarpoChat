@@ -1,7 +1,6 @@
 package com.example.harpochat.calculator
 
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.Window
@@ -16,7 +15,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -33,6 +31,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
@@ -284,18 +283,33 @@ private fun CalculatorScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        // Afficheur : expression (ligne 1) + résultat (ligne 2)
+        // ===== Afficheur compact, résultat plus grand et centrage vertical =====
+        val exprFontSize  = if (isLandscape) 52.sp else 56.sp
+        val resultFontSize = if (isLandscape) 48.sp else 52.sp
+        val cardPaddingH = 16.dp
+        val cardPaddingV = 12.dp
+
+        val displayHeight = if (isLandscape) 92.dp else 300.dp // ajuste librement (ex: 80–120.dp)
+        val displayPaddingTop = if (isLandscape) 8.dp else 20.dp
+
         Box(
             modifier = Modifier
+                .padding(top = displayPaddingTop)
                 .fillMaxWidth()
-                .weight(1f)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                .padding(16.dp)
+                .height(displayHeight) // <- hauteur fixe
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(horizontal = cardPaddingH, vertical = cardPaddingV),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            Column(Modifier.fillMaxWidth()) {
-                val exprTop = if (showEquals && lastExpr != null) lastExpr!! else expressionLine()
-
-                // Ligne 1 : expression / résultat
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.End
+            ) {
+                // --- Ligne 1 : expression (ou texte courant) ---
                 AnimatedContent(
                     targetState = expressionLine(),
                     transitionSpec = {
@@ -310,17 +324,17 @@ private fun CalculatorScreen(
                 ) { text ->
                     Text(
                         text = text,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.90f),
-                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = exprFontSize),
                         maxLines = 1,
                         textAlign = TextAlign.End,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
 
-                // Ligne 2 : prévisualisation (vide => disparaît)
+                // --- Ligne 2 : prévisualisation résultat (plus grande) ---
                 val preview = previewResultOrEmpty()
                 AnimatedContent(
                     targetState = preview,
@@ -337,8 +351,8 @@ private fun CalculatorScreen(
                     if (txt.isNotEmpty()) {
                         Text(
                             text = txt,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
+                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = resultFontSize),
                             maxLines = 1,
                             textAlign = TextAlign.End,
                             modifier = Modifier.fillMaxWidth()
@@ -347,100 +361,102 @@ private fun CalculatorScreen(
                         Spacer(Modifier.height(0.dp))
                     }
                 }
-
             }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        if (!isLandscape) {
-            /* ======== PORTRAIT ======== */
-            CalcRow { MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR") }
-            CalcRow {
-                FuncKey("C") { clearAll() }
-                OpKey("÷") { applyOp(Op.DIV) }
-                OpKey("×") { applyOp(Op.MUL) }
-                FuncKey("⌫") { backspace() }
-            }
-            CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
-            CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
-
-            // Deux dernières rangées fusionnées : "=" sur 2 lignes
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = spacedBy(8.dp)
-            ) {
-                Column(
-                    modifier = Modifier.weight(3f),
-                    verticalArrangement = spacedBy(8.dp)
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(8.dp)) {
-                        DigitKey("1") { inputDigit("1") }
-                        DigitKey("2") { inputDigit("2") }
-                        DigitKey("3") { inputDigit("3") }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(8.dp)) {
-                        BigDigitKey("0") { inputDigit("0") }
-                        DigitKey(".") { inputDot() }
-                    }
+// Le pavé de touches prend tout l’espace restant
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            if (!isLandscape) {
+                // ======== PORTRAIT ========
+                CalcRow { MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR") }
+                CalcRow {
+                    FuncKey("C") { clearAll() }
+                    OpKey("÷") { applyOp(Op.DIV) }
+                    OpKey("×") { applyOp(Op.MUL) }
+                    FuncKey("⌫") { backspace() }
                 }
-                EqualKeyTall(
-                    modifier = Modifier.weight(1f),
-                    onTap = { equalsNormal() },
-                    onLong = {
+                CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
+                CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = spacedBy(KeyPadding)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(3f),
+                        verticalArrangement = spacedBy(KeyPadding)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(KeyPadding)) {
+                            DigitKey("1") { inputDigit("1") }
+                            DigitKey("2") { inputDigit("2") }
+                            DigitKey("3") { inputDigit("3") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(KeyPadding)) {
+                            BigDigitKey("0") { inputDigit("0") }
+                            DigitKey(".") { inputDot() }
+                        }
+                    }
+                    EqualKeyTall(
+                        modifier = Modifier.weight(0.94f),
+                        onTap = { equalsNormal() },
+                        onLong = {
+                            when (validatePins(getDisplayText().trim())) {
+                                PinResult.SECRET -> onUnlock()
+                                PinResult.DURESS -> onDuress()
+                                PinResult.NO_MATCH -> {}
+                            }
+                        }
+                    )
+                }
+                Spacer(Modifier.height(KeyPadding))
+            } else {
+                // ======== PAYSAGE (scientifique light) ========
+                CalcRow {
+                    FuncKey("(") { /* TODO */ }
+                    FuncKey(")") { /* TODO */ }
+                    FuncKey("1/x") { /* TODO */ }
+                    MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
+                }
+                CalcRow {
+                    FuncKey("x²") { /* TODO */ }
+                    FuncKey("x³") { /* TODO */ }
+                    FuncKey("C") { clearAll() }
+                    OpKey("÷") { applyOp(Op.DIV) }
+                    OpKey("×") { applyOp(Op.MUL) }
+                    FuncKey("⌫") { backspace() }
+                }
+                CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
+                CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
+                CalcRow {
+                    DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
+                    EqualKey(onTap = { equalsNormal() }, onLong = {
                         when (validatePins(getDisplayText().trim())) {
                             PinResult.SECRET -> onUnlock()
                             PinResult.DURESS -> onDuress()
                             PinResult.NO_MATCH -> {}
                         }
-                    }
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-        } else {
-            /* ======== PAYSAGE (scientifique light) ======== */
-            CalcRow {
-                FuncKey("(") { /* TODO */ }
-                FuncKey(")") { /* TODO */ }
-                FuncKey("1/x") { /* TODO */ }
-                MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
-            }
-            CalcRow {
-                FuncKey("x²") { /* TODO */ }
-                FuncKey("x³") { /* TODO */ }
-                FuncKey("C") { clearAll() }
-                OpKey("÷") { applyOp(Op.DIV) }
-                OpKey("×") { applyOp(Op.MUL) }
-                FuncKey("⌫") { backspace() }
-            }
-            CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
-            CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
-            CalcRow {
-                DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
-                EqualKey(onTap = { equalsNormal() }, onLong = {
-                    when (validatePins(getDisplayText().trim())) {
-                        PinResult.SECRET -> onUnlock()
-                        PinResult.DURESS -> onDuress()
-                        PinResult.NO_MATCH -> {}
-                    }
-                })
-            }
-            CalcRow {
-                FuncKey("%") {
-                    val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
-                    setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
-                    resetOnNextDigit = true
-                    lastExpr = null; showEquals = false
+                    })
                 }
-                BigDigitKey("0") { inputDigit("0") }
-                DigitKey(".") { inputDot() }
-                EqualKeyWide(onTap = { equalsNormal() }, onLong = {
-                    when (validatePins(getDisplayText().trim())) {
-                        PinResult.SECRET -> onUnlock()
-                        PinResult.DURESS -> onDuress()
-                        PinResult.NO_MATCH -> {}
+                CalcRow {
+                    FuncKey("%") {
+                        val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
+                        setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
+                        resetOnNextDigit = true
                     }
-                })
+                    BigDigitKey("0") { inputDigit("0") }
+                    DigitKey(".") { inputDot() }
+                    EqualKeyWide(onTap = { equalsNormal() }, onLong = {
+                        when (validatePins(getDisplayText().trim())) {
+                            PinResult.SECRET -> onUnlock()
+                            PinResult.DURESS -> onDuress()
+                            PinResult.NO_MATCH -> {}
+                        }
+                    })
+                }
             }
         }
     }
@@ -459,15 +475,19 @@ private val MemTextBlue = Color(0xFF4C6FFF)
 private val KeyDark = Color(0xFF1A1F27)   // fond gris foncé
 private val KeyLight = Color(0xFF3A404D)  // fond gris clair (opérateurs)
 
+val KeyHeight = 80.dp
+val KeyPadding = 8.dp
+
 @Composable
 private fun CalcRow(content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = spacedBy(8.dp),
+        horizontalArrangement = spacedBy(KeyPadding),
         content = content
     )
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(KeyPadding))
 }
+
 
 @Composable
 private fun KeyBase(
@@ -478,7 +498,7 @@ private fun KeyBase(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.height(56.dp),
+        modifier = modifier.height(KeyHeight),
         shape = RoundedCornerShape(14.dp),
         color = container,
         tonalElevation = 2.dp,
@@ -511,7 +531,6 @@ private fun KeyBase(
     Surface(
         modifier = Modifier
             .weight(1f)
-            .height(56.dp)
             .combinedClickable(onClick = onTap, onLongClick = onLong),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.primary,
@@ -549,7 +568,7 @@ private fun KeyBase(
     onTap: () -> Unit,
     onLong: () -> Unit
 ) {
-    val tallHeight = 56.dp * 2 + 8.dp
+    val tallHeight = KeyHeight * 2 + KeyPadding
     Surface(
         modifier = modifier
             .height(tallHeight)
