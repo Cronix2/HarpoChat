@@ -9,18 +9,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement.spacedBy
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,14 +46,12 @@ import kotlinx.coroutines.delay
  * ========================= */
 class CalculatorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Masque la barre de titre si présente
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
         actionBar?.hide()
 
-        enableEdgeToEdge() // pas de barre "Calculator"
+        enableEdgeToEdge()
 
-        // Pins par défaut — NE PAS MODIFIER sans accord
         val prefs = SecureStore.prefs(this)
         if (!prefs.contains(KEY_SECRET_PIN)) prefs.edit { putString(KEY_SECRET_PIN, "527418") }
         if (!prefs.contains(KEY_DURESS_PIN)) prefs.edit { putString(KEY_DURESS_PIN, "1234") }
@@ -64,9 +60,7 @@ class CalculatorActivity : ComponentActivity() {
             DarkCalcTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     CalculatorScreen(
-                        onUnlock = {
-                            startActivity(Intent(this, ConversationsActivity::class.java))
-                        },
+                        onUnlock = { startActivity(Intent(this, ConversationsActivity::class.java)) },
                         onDuress = {
                             prefs.edit { clear() }
                             Toast.makeText(this, "Memory cleared", Toast.LENGTH_SHORT).show()
@@ -109,7 +103,6 @@ private fun CalculatorScreen(
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var justDidEquals by remember { mutableStateOf(false) }
 
-
     // Affichage (texte saisi)
     var display by remember { mutableStateOf(TextFieldValue("0")) }
 
@@ -118,10 +111,6 @@ private fun CalculatorScreen(
     var pendingOp by remember { mutableStateOf<Op?>(null) }
     var resetOnNextDigit by remember { mutableStateOf(false) }
     val mc = remember { MathContext(16, RoundingMode.HALF_UP) }
-
-    // Pour afficher temporairement l'expression avant "="
-    var lastExpr by remember { mutableStateOf<String?>(null) }
-    var showEquals by remember { mutableStateOf(false) }
 
     // utils
     fun setDisplayText(s: String) { display = TextFieldValue(s) }
@@ -135,35 +124,22 @@ private fun CalculatorScreen(
         Op.DIV -> "÷"
     }
 
-
-    /** Construit la ligne d’expression (ligne du haut) */
-    // Construit la ligne d’expression
+    // Ligne d’expression (haut)
     fun expressionLine(): String {
         val cur = prettyText(getDisplayText())
         return if (pendingOp != null && accumulator != null) {
             val left = accumulator!!.stripTrailingZeros().toPlainString().replace('.', ',')
-            if (resetOnNextDigit) {
-                "$left ${opSymbol(pendingOp!!)}"   // on attend le 2e opérande → pas de 'cur'
-            } else {
-                "$left ${opSymbol(pendingOp!!)} $cur"
-            }
-        } else {
-            cur
-        }
+            if (resetOnNextDigit) "$left ${opSymbol(pendingOp!!)}"
+            else "$left ${opSymbol(pendingOp!!)} $cur"
+        } else cur
     }
 
-
-
-
-    /** Aperçu du résultat (ligne du bas) tant que l’expression est complète */
-    // Renvoie l’aperçu du résultat uniquement si acc + op + second opérande sont présents
+    // Aperçu du résultat (bas)
     fun previewResultOrEmpty(): String {
         val acc = accumulator ?: return ""
         val op  = pendingOp   ?: return ""
-        // second opérande doit exister (et ne pas être simplement "0" parce qu’on n’a rien saisi)
         val rightTxt = getDisplayText()
         val right = rightTxt.replace(',', '.').toBigDecimalOrNull() ?: return ""
-        // si resetOnNextDigit est encore vrai, on n’a pas commencé le deuxième opérande
         if (resetOnNextDigit) return ""
 
         val result = when (op) {
@@ -174,7 +150,6 @@ private fun CalculatorScreen(
         }
         return formatForDisplay(result)
     }
-
 
     fun backspace() {
         val cur = getDisplayText()
@@ -204,8 +179,6 @@ private fun CalculatorScreen(
         accumulator = null
         pendingOp = null
         resetOnNextDigit = false
-        lastExpr = null
-        showEquals = false
     }
 
     fun applyOp(op: Op) {
@@ -214,10 +187,8 @@ private fun CalculatorScreen(
             val acc = accumulator
 
             if (acc == null) {
-                // premier opérande
                 accumulator = current
             } else if (pendingOp != null) {
-                // évalue acc (op) current pour chaînage
                 val result = when (pendingOp) {
                     Op.ADD -> acc.add(current, mc)
                     Op.SUB -> acc.subtract(current, mc)
@@ -243,8 +214,6 @@ private fun CalculatorScreen(
             val current = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
             val acc = accumulator
             val op = pendingOp
-
-            // Était-on dans un état "calcul possible" ? (acc + op + second opérande)
             val canCompute = acc != null && op != null && !resetOnNextDigit
 
             if (acc != null && op != null) {
@@ -254,16 +223,11 @@ private fun CalculatorScreen(
                     Op.MUL -> acc.multiply(current, mc)
                     Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
                 }
-                // le résultat devient la nouvelle "entrée"
                 setDisplayText(formatForDisplay(result))
                 accumulator = null
                 pendingOp = null
                 resetOnNextDigit = false
-
-                // N’arme l’animation que si un résultat était réellement affichable
-                if (canCompute) {
-                    justDidEquals = true
-                }
+                if (canCompute) justDidEquals = true
             }
         } catch (_: Throwable) {
             setDisplayText("Error")
@@ -273,49 +237,50 @@ private fun CalculatorScreen(
         }
     }
 
-
-
     /* ---------- UI ---------- */
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp), // padding latéral fixe
         horizontalAlignment = Alignment.End
     ) {
-        // ===== Afficheur compact, résultat plus grand et centrage vertical =====
+        // ====== Pourcentages demandés ======
+        // 5% haut, 25% display, 65% clavier, 3% bas, 2% padding display et clavier
+        val weightDisplay = 0.25f
+        val weightClavier = 0.65f
+        val weightBas = 0.05f
+        val weightHaut = 0.05f
+        val weightEspace = 0.02f
+
+        Spacer(Modifier.weight(weightHaut))
+
+        // ====== Display 25% ======
         val exprFontSize  = if (isLandscape) 52.sp else 56.sp
         val resultFontSize = if (isLandscape) 48.sp else 52.sp
-        val cardPaddingH = 16.dp
-        val cardPaddingV = 12.dp
-
-        val displayHeight = if (isLandscape) 92.dp else 300.dp // ajuste librement (ex: 80–120.dp)
-        val displayPaddingTop = if (isLandscape) 8.dp else 20.dp
 
         Box(
             modifier = Modifier
-                .padding(top = displayPaddingTop)
+                .weight(weightDisplay)
                 .fillMaxWidth()
-                .height(displayHeight) // <- hauteur fixe
                 .background(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(12.dp)
                 )
-                .padding(horizontal = cardPaddingH, vertical = cardPaddingV),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.CenterEnd
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.End
             ) {
-                // --- Ligne 1 : expression (ou texte courant) ---
                 AnimatedContent(
                     targetState = expressionLine(),
                     transitionSpec = {
                         if (justDidEquals) {
-                            slideInVertically(animationSpec = tween(180)) { h -> +h } togetherWith
-                                    slideOutVertically(animationSpec = tween(180)) { h -> -h }
+                            slideInVertically(tween(180)) { +it } togetherWith
+                                    slideOutVertically(tween(180)) { -it }
                         } else {
                             EnterTransition.None togetherWith ExitTransition.None
                         }
@@ -334,14 +299,13 @@ private fun CalculatorScreen(
 
                 Spacer(Modifier.height(6.dp))
 
-                // --- Ligne 2 : prévisualisation résultat (plus grande) ---
                 val preview = previewResultOrEmpty()
                 AnimatedContent(
                     targetState = preview,
                     transitionSpec = {
                         if (justDidEquals) {
-                            slideInVertically(animationSpec = tween(160)) { h -> +h } togetherWith
-                                    slideOutVertically(animationSpec = tween(160)) { h -> -h }
+                            slideInVertically(tween(160)) { +it } togetherWith
+                                    slideOutVertically(tween(160)) { -it }
                         } else {
                             EnterTransition.None togetherWith ExitTransition.None
                         }
@@ -364,44 +328,69 @@ private fun CalculatorScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-// Le pavé de touches prend tout l’espace restant
+        // ====== Espace 2% ======
+        Spacer(Modifier.weight(weightEspace)) // petit écart visuel, n’impacte pas la répartition %
         Column(
-            modifier = Modifier.weight(1f)
+            // ====== Clavier 65% ======
+            modifier = Modifier
+                .weight(weightClavier)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(KeyPadding)
         ) {
             if (!isLandscape) {
-                // ======== PORTRAIT ========
-                CalcRow { MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR") }
-                CalcRow {
+                // chaque rangée = weight(1f) -> même hauteur
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
+                }
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     FuncKey("C") { clearAll() }
                     OpKey("÷") { applyOp(Op.DIV) }
                     OpKey("×") { applyOp(Op.MUL) }
                     FuncKey("⌫") { backspace() }
                 }
-                CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
-                CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)}
+                }
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)}
+                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = spacedBy(KeyPadding)
-                ) {
+                // Dernier bloc = 2 rangées à gauche + "=" qui prend toute la hauteur à droite
+                Row(Modifier
+                    .weight(2f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     Column(
-                        modifier = Modifier.weight(3f),
-                        verticalArrangement = spacedBy(KeyPadding)
+                        modifier = Modifier
+                            .weight(3f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(KeyPadding)
                     ) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(KeyPadding)) {
+                        Row(Modifier
+                            .weight(1f)
+                            .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                             DigitKey("1") { inputDigit("1") }
                             DigitKey("2") { inputDigit("2") }
                             DigitKey("3") { inputDigit("3") }
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = spacedBy(KeyPadding)) {
+                        Row(Modifier
+                            .weight(1f)
+                            .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                             BigDigitKey("0") { inputDigit("0") }
                             DigitKey(".") { inputDot() }
                         }
                     }
                     EqualKeyTall(
-                        modifier = Modifier.weight(0.94f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                         onTap = { equalsNormal() },
                         onLong = {
                             when (validatePins(getDisplayText().trim())) {
@@ -412,16 +401,19 @@ private fun CalculatorScreen(
                         }
                     )
                 }
-                Spacer(Modifier.height(KeyPadding))
             } else {
-                // ======== PAYSAGE (scientifique light) ========
-                CalcRow {
+                // PAYSAGE (existant, rangées à poids égaux)
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     FuncKey("(") { /* TODO */ }
                     FuncKey(")") { /* TODO */ }
                     FuncKey("1/x") { /* TODO */ }
                     MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
                 }
-                CalcRow {
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     FuncKey("x²") { /* TODO */ }
                     FuncKey("x³") { /* TODO */ }
                     FuncKey("C") { clearAll() }
@@ -429,9 +421,19 @@ private fun CalculatorScreen(
                     OpKey("×") { applyOp(Op.MUL) }
                     FuncKey("⌫") { backspace() }
                 }
-                CalcRow { DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)} }
-                CalcRow { DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)} }
-                CalcRow {
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)}
+                }
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)}
+                }
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
                     EqualKey(onTap = { equalsNormal() }, onLong = {
                         when (validatePins(getDisplayText().trim())) {
@@ -441,7 +443,9 @@ private fun CalculatorScreen(
                         }
                     })
                 }
-                CalcRow {
+                Row(Modifier
+                    .weight(1f)
+                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     FuncKey("%") {
                         val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
                         setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
@@ -459,35 +463,122 @@ private fun CalculatorScreen(
                 }
             }
         }
+
+        // ====== Padding bas 3% ======
+        Spacer(Modifier.weight(weightBas))
     }
+
     LaunchedEffect(justDidEquals) {
         if (justDidEquals) {
-            delay(200)   // un chouïa > aux tweens (180 ms)
+            delay(200)
             justDidEquals = false
         }
     }
-
 }
 
 /* =============== Composants de touches =============== */
 
 private val MemTextBlue = Color(0xFF4C6FFF)
-private val KeyDark = Color(0xFF1A1F27)   // fond gris foncé
-private val KeyLight = Color(0xFF3A404D)  // fond gris clair (opérateurs)
+private val KeyDark = Color(0xFF1A1F27)
+private val KeyLight = Color(0xFF3A404D)
 
-val KeyHeight = 80.dp
 val KeyPadding = 8.dp
 
 @Composable
-private fun CalcRow(content: @Composable RowScope.() -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = spacedBy(KeyPadding),
-        content = content
-    )
-    Spacer(Modifier.height(KeyPadding))
+private fun RowScope.DigitKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier
+        .weight(1f)
+        .fillMaxHeight(), onClick = onClick)
+
+@Composable
+private fun RowScope.BigDigitKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier
+        .weight(2f)
+        .fillMaxHeight(), onClick = onClick)
+
+@Composable
+private fun RowScope.OpKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier
+        .weight(1f)
+        .fillMaxHeight(), container = KeyLight, onClick = onClick)
+
+@Composable
+private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
+    KeyBase(label, modifier = Modifier
+        .weight(1f)
+        .fillMaxHeight(), container = KeyLight, onClick = onClick)
+
+@Composable
+private fun RowScope.MemKey(label: String) =
+    KeyBase(label, modifier = Modifier
+        .weight(1f)
+        .fillMaxHeight(), container = KeyDark, contentColor = MemTextBlue, onClick = { })
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp,
+        onClick = onTap
+    ) {
+        Box(Modifier
+            .fillMaxSize()
+            .combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center) {
+            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun RowScope.EqualKeyWide(onTap: () -> Unit, onLong: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .weight(2f)
+            .fillMaxHeight(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp,
+        onClick = onTap
+    ) {
+        Box(Modifier
+            .fillMaxSize()
+            .combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center) {
+            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
+
+/** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun EqualKeyTall(
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+    onLong: () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primary,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp,
+        onClick = onTap
+    ) {
+        Box(Modifier
+            .fillMaxSize()
+            .combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center) {
+            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+}
 
 @Composable
 private fun KeyBase(
@@ -498,7 +589,7 @@ private fun KeyBase(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.height(KeyHeight),
+        modifier = modifier,
         shape = RoundedCornerShape(14.dp),
         color = container,
         tonalElevation = 2.dp,
@@ -507,79 +598,6 @@ private fun KeyBase(
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(label, style = MaterialTheme.typography.titleLarge, color = contentColor)
-        }
-    }
-}
-
-@Composable private fun RowScope.DigitKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(1f), onClick = onClick)
-
-@Composable private fun RowScope.BigDigitKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(2f), onClick = onClick)
-
-@Composable private fun RowScope.OpKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(1f), container = KeyLight, onClick = onClick)
-
-@Composable private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(1f), container = KeyLight, onClick = onClick)
-
-@Composable private fun RowScope.MemKey(label: String) =
-    KeyBase(label, modifier = Modifier.weight(1f), container = KeyDark, contentColor = MemTextBlue, onClick = { })
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .weight(1f)
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primary,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable private fun RowScope.EqualKeyWide(onTap: () -> Unit, onLong: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .weight(2f) // large
-            .height(56.dp)
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primary,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
-        }
-    }
-}
-
-/** "=" sur 2 lignes (hauteur = 2 touches + l’espacement) */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable private fun EqualKeyTall(
-    modifier: Modifier = Modifier,
-    onTap: () -> Unit,
-    onLong: () -> Unit
-) {
-    val tallHeight = KeyHeight * 2 + KeyPadding
-    Surface(
-        modifier = modifier
-            .height(tallHeight)
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primary,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
@@ -597,7 +615,7 @@ private fun formatForDisplay(bd: BigDecimal): String {
     val useSci = (abs.compareTo(BigDecimal("1000000000")) > 0) ||
             (abs != BigDecimal.ZERO && abs < BigDecimal("0.000001"))
     return if (useSci) {
-        val symbols = DecimalFormatSymbols.getInstance(Locale.FRANCE) // virgule décimale
+        val symbols = DecimalFormatSymbols.getInstance(Locale.FRANCE)
         val fmt = DecimalFormat("0.######E0", symbols)
         fmt.format(bd)
     } else {
@@ -605,9 +623,7 @@ private fun formatForDisplay(bd: BigDecimal): String {
     }
 }
 
-
-
-/* Petit thème sombre cohérent */
+/* Thème sombre */
 @Composable
 private fun DarkCalcTheme(content: @Composable () -> Unit) {
     val dark = darkColorScheme(
