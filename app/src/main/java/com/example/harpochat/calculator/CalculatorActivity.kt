@@ -403,17 +403,21 @@ private fun CalculatorScreen(
                 }
             } else {
                 // PAYSAGE (existant, rangées à poids égaux)
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
                     FuncKey("(") { /* TODO */ }
                     FuncKey(")") { /* TODO */ }
                     FuncKey("1/x") { /* TODO */ }
                     MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
                     FuncKey("x²") { /* TODO */ }    //X puissance 2
                     FuncKey("x³") { /* TODO */ }    //X puissance 3
                     FuncKey("xʸ") { /* TODO */ }    //X puissance y
@@ -422,57 +426,97 @@ private fun CalculatorScreen(
                     OpKey("×") { applyOp(Op.MUL) }
                     FuncKey("⌫") { backspace() }
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
                     FuncKey("x!") { /* TODO */ }    //X factoriel
                     FuncKey("√") { /* TODO */ }     //racine carré de X
                     FuncKey("ʸ√X") { /* TODO */ }   //racine yème de X
-                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)}
+                    DigitKey("7") { inputDigit("7") }; DigitKey("8") { inputDigit("8") }; DigitKey("9") {
+                    inputDigit(
+                        "9"
+                    )
+                }; OpKey("−") { applyOp(Op.SUB) }
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
                     FuncKey("e") { /* TODO */ }     //exponentiel de X
                     FuncKey("ln") { /* TODO */ }    //ln de X
                     FuncKey("lg") { /* TODO */ }    //lg de X
-                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)}
+                    DigitKey("4") { inputDigit("4") }; DigitKey("5") { inputDigit("5") }; DigitKey("6") {
+                    inputDigit(
+                        "6"
+                    )
+                }; OpKey("+") { applyOp(Op.ADD) }
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("sin") { /* TODO */ }   //sin de X
-                    FuncKey("cos") { /* TODO */ }   //cos de X
-                    FuncKey("tan") { /* TODO */ }   //tan de X
-                    DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
-                    EqualKey(onTap = { equalsNormal() }, onLong = {
-                        when (validatePins(getDisplayText().trim())) {
-                            PinResult.SECRET -> onUnlock()
-                            PinResult.DURESS -> onDuress()
-                            PinResult.NO_MATCH -> {}
+
+                // ───── Bloc final paysage : 2 rangées empilées à gauche + "=" vertical à droite ─────
+                Row(
+                    Modifier
+                        .weight(2f)                         // hauteur = 2 rangées
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    // À gauche = 6 colonnes (total), donc weight(6f)
+                    Column(
+                        modifier = Modifier
+                            .weight(6f)                     // ← exactement 6 “colonnes”
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(KeyPadding)
+                    ) {
+                        Row(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                        ) {
+                            FuncKey("sin") { /* TODO */ }
+                            FuncKey("cos") { /* TODO */ }
+                            FuncKey("tan") { /* TODO */ }
+                            DigitKey("1") { inputDigit("1") }
+                            DigitKey("2") { inputDigit("2") }
+                            DigitKey("3") { inputDigit("3") }
                         }
-                    })
-                }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("Inv") { /* TODO */ }   //Inv
-                    FuncKey("Rad") { /* TODO */ }   //Rad
-                    FuncKey("π") {inputDigit("3.141592653589793")}     //pi
-                    DigitKey("%") {
-                        val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
-                        setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
-                        resetOnNextDigit = true
+                        Row(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                        ) {
+                            FuncKey("Inv") { /* TODO */ }
+                            FuncKey("Rad") { /* TODO */ }
+                            FuncKey("π") { inputDigit("3.141592653589793") }
+                            DigitKey("%") {
+                                val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
+                                setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
+                                resetOnNextDigit = true
+                            }
+                            DigitKey("0") { inputDigit("0") }
+                            DigitKey(".") { inputDot() }
+                        }
                     }
-                    DigitKey("0") { inputDigit("0") }
-                    DigitKey(".") { inputDot() }
-                    EqualKey(onTap = { equalsNormal() }, onLong = {
-                        when (validatePins(getDisplayText().trim())) {
-                            PinResult.SECRET -> onUnlock()
-                            PinResult.DURESS -> onDuress()
-                            PinResult.NO_MATCH -> {}
+
+                    // À droite = 1 colonne (le “=”), donc weight(1f)
+                    EqualKeyTall(
+                        modifier = Modifier
+                            .weight(1f)                     // ← exactement 1 “colonne”
+                            //avoir un padding sur le coté gauche uniquement
+                            .padding(start = 8.dp)
+                            .fillMaxHeight(),
+                        onTap = { equalsNormal() },
+                        onLong = {
+                            when (validatePins(getDisplayText().trim())) {
+                                PinResult.SECRET -> onUnlock()
+                                PinResult.DURESS -> onDuress()
+                                PinResult.NO_MATCH -> {}
+                            }
                         }
-                    })
+                    )
                 }
             }
         }
