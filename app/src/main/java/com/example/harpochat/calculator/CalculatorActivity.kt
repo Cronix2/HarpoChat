@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,11 +35,13 @@ import androidx.core.content.edit
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
+import kotlin.math.*
 import kotlinx.coroutines.delay
 
 /* =========================
@@ -87,7 +90,7 @@ class CalculatorActivity : ComponentActivity() {
 }
 
 /* ====== Modèles / état ====== */
-private enum class Op { ADD, SUB, MUL, DIV }
+private enum class Op { ADD, SUB, MUL, DIV, POW, ROOTN }
 private enum class PinResult { SECRET, DURESS, NO_MATCH }
 
 /* ==============================
@@ -100,11 +103,16 @@ private fun CalculatorScreen(
     onDuress: () -> Unit,
     validatePins: (String) -> PinResult
 ) {
+    val context = LocalContext.current
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var justDidEquals by remember { mutableStateOf(false) }
 
     // Affichage (texte saisi)
     var display by remember { mutableStateOf(TextFieldValue("0")) }
+
+    // Modes scientifiques
+    var invMode by remember { mutableStateOf(false) }   // Inv = inverse trig
+    var radMode by remember { mutableStateOf(true) }    // true=radians, false=degrés
 
     // Moteur
     var accumulator by remember { mutableStateOf<BigDecimal?>(null) }
@@ -122,6 +130,8 @@ private fun CalculatorScreen(
         Op.SUB -> "−"
         Op.MUL -> "×"
         Op.DIV -> "÷"
+        Op.POW -> "xʸ"
+        Op.ROOTN -> "ʸ√X"
     }
 
     // Ligne d’expression (haut)
@@ -147,6 +157,13 @@ private fun CalculatorScreen(
             Op.SUB -> acc.subtract(right, mc)
             Op.MUL -> acc.multiply(right, mc)
             Op.DIV -> if (right == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(right, mc)
+            Op.POW -> try { acc.pow(right.toInt()) } catch (_: Throwable) { BigDecimal.ZERO }
+            Op.ROOTN -> try {
+                // acc = n, right = X  →  n√X = X^(1/n)
+                val n = acc.toDouble()
+                val x = right.toDouble()
+                if (n == 0.0) BigDecimal.ZERO else BigDecimal.valueOf(x.pow(1.0 / n))
+            } catch (_: Throwable) { BigDecimal.ZERO }
         }
         return formatForDisplay(result)
     }
@@ -181,26 +198,44 @@ private fun CalculatorScreen(
         resetOnNextDigit = false
     }
 
-    fun applyOp(op: Op) {
+// import en haut du fichier si tu utilises ROOTN/POW
+// import kotlin.math.pow
+
+    fun applyBinary(op: Op) {
         try {
             val current = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
             val acc = accumulator
 
             if (acc == null) {
+                // Premier opérande : on l’enregistre simplement
                 accumulator = current
             } else if (pendingOp != null) {
-                val result = when (pendingOp) {
-                    Op.ADD -> acc.add(current, mc)
-                    Op.SUB -> acc.subtract(current, mc)
-                    Op.MUL -> acc.multiply(current, mc)
-                    Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
-                    null   -> acc
+                // On évalue l’opération EN ATTENTE avec acc (gauche) et current (droite)
+                val result = when (pendingOp!!) {
+                    Op.ADD   -> acc.add(current, mc)
+                    Op.SUB   -> acc.subtract(current, mc)
+                    Op.MUL   -> acc.multiply(current, mc)
+                    Op.DIV   -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
+
+                    // puissance : acc ^ current
+                    Op.POW   -> try { acc.pow(current.toInt()) } catch (_: Throwable) { BigDecimal.ZERO }
+
+                    // racine n-ième : n = acc, x = current  → n√x
+                    Op.ROOTN -> try {
+                        val n = acc.toDouble()
+                        val x = current.toDouble()
+                        if (n == 0.0) BigDecimal.ZERO else BigDecimal.valueOf(x.pow(1.0 / n))
+                    } catch (_: Throwable) { BigDecimal.ZERO }
                 }
+
                 accumulator = result
                 setDisplayText(formatForDisplay(result))
             }
+
+            // On met en attente la NOUVELLE opération
             pendingOp = op
             resetOnNextDigit = true
+
         } catch (_: Throwable) {
             setDisplayText("Error")
             accumulator = null
@@ -208,6 +243,7 @@ private fun CalculatorScreen(
             resetOnNextDigit = true
         }
     }
+
 
     fun equalsNormal() {
         try {
@@ -222,6 +258,12 @@ private fun CalculatorScreen(
                     Op.SUB -> acc.subtract(current, mc)
                     Op.MUL -> acc.multiply(current, mc)
                     Op.DIV -> if (current == BigDecimal.ZERO) BigDecimal.ZERO else acc.divide(current, mc)
+                    Op.POW -> try { acc.pow(current.toInt()) } catch (_: Throwable) { BigDecimal.ZERO }
+                    Op.ROOTN -> try {
+                        val n = acc.toDouble()
+                        val x = current.toDouble()
+                        if (n == 0.0) BigDecimal.ZERO else BigDecimal.valueOf(x.pow(1.0 / n))
+                    } catch (_: Throwable) { BigDecimal.ZERO }
                 }
                 setDisplayText(formatForDisplay(result))
                 accumulator = null
@@ -237,16 +279,66 @@ private fun CalculatorScreen(
         }
     }
 
+    /* ------- helpers unaires ------- */
+    fun unaryOnDisplay(block: (BigDecimal) -> BigDecimal?) {
+        val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: return
+        val r = block(v) ?: return
+        setDisplayText(formatForDisplay(r))
+        resetOnNextDigit = true
+    }
+
+    fun recip() = unaryOnDisplay { if (it == BigDecimal.ZERO) null else BigDecimal.ONE.divide(it, mc) }
+    fun square() = unaryOnDisplay { it.multiply(it, mc) }
+    fun cube()   = unaryOnDisplay { it.multiply(it, mc).multiply(it, mc) }
+    fun sqrtX()  = unaryOnDisplay {
+        val d = it.toDouble()
+        if (d < 0) null else BigDecimal.valueOf(kotlin.math.sqrt(d))
+    }
+    fun lnX() = unaryOnDisplay {
+        val d = it.toDouble()
+        if (d <= 0.0) null else BigDecimal.valueOf(kotlin.math.ln(d))
+    }
+
+    fun lgX() = unaryOnDisplay {
+        val d = it.toDouble()
+        if (d <= 0.0) null else BigDecimal.valueOf(kotlin.math.log10(d))
+    }
+
+    fun percent() = unaryOnDisplay { it.divide(BigDecimal(100), mc) }
+    fun fact() = unaryOnDisplay {
+        // Factorielle pour n entier [0..200] avec BigInteger
+        val n = try { it.toBigIntegerExact() } catch (_: Throwable) { return@unaryOnDisplay null }
+        if (n < BigInteger.ZERO || n > BigInteger.valueOf(200)) return@unaryOnDisplay null
+        var acc = BigInteger.ONE
+        var k = BigInteger.ONE
+        while (k <= n) { acc = acc * k; k += BigInteger.ONE }
+        BigDecimal(acc)
+    }
+    fun setConstPi() = setDisplayText(formatForDisplay(BigDecimal.valueOf(Math.PI)))
+    fun setConstE()  = setDisplayText(formatForDisplay(BigDecimal.valueOf(Math.E)))
+
+    fun trig(apply: (Double) -> Double, invApply: (Double) -> Double) = unaryOnDisplay {
+        val x = it.toDouble()
+        val angle = if (invMode) x else if (radMode) x else Math.toRadians(x)
+        val result = if (invMode) {
+            // inverse: résultat en angle → retransforme en degrés si besoin
+            val a = invApply(angle)
+            BigDecimal.valueOf(if (radMode) a else Math.toDegrees(a))
+        } else {
+            BigDecimal.valueOf(apply(angle))
+        }
+        result
+    }
+
     /* ---------- UI ---------- */
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp), // padding latéral fixe
+            .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        // ====== Pourcentages demandés ======
-        // 5% haut, 25% display, 65% clavier, 3% bas, 2% padding display et clavier
+        // 5% haut, 25% display, 65% clavier, 3% bas, 2% espace
         val weightDisplay = 0.25f
         val weightClavier = 0.65f
         val weightBas = 0.05f
@@ -328,69 +420,49 @@ private fun CalculatorScreen(
             }
         }
 
-        // ====== Espace 2% ======
-        Spacer(Modifier.weight(weightEspace)) // petit écart visuel, n’impacte pas la répartition %
+        Spacer(Modifier.weight(weightEspace))
+
         Column(
-            // ====== Clavier 65% ======
             modifier = Modifier
                 .weight(weightClavier)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(KeyPadding)
         ) {
             if (!isLandscape) {
-                // chaque rangée = weight(1f) -> même hauteur
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                // ----- PORTRAIT -----
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     FuncKey("C") { clearAll() }
-                    OpKey("÷") { applyOp(Op.DIV) }
-                    OpKey("×") { applyOp(Op.MUL) }
+                    OpKey("÷") { applyBinary(Op.DIV) }
+                    OpKey("×") { applyBinary(Op.MUL) }
                     FuncKey("⌫") { backspace() }
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)}
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyBinary(Op.SUB)}
                 }
-                Row(Modifier
-                    .weight(1f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)}
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyBinary(Op.ADD)}
                 }
 
-                // Dernier bloc = 2 rangées à gauche + "=" qui prend toute la hauteur à droite
-                Row(Modifier
-                    .weight(2f)
-                    .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                Row(Modifier.weight(2f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                     Column(
-                        modifier = Modifier
-                            .weight(3f)
-                            .fillMaxHeight(),
+                        modifier = Modifier.weight(3f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(KeyPadding)
                     ) {
-                        Row(Modifier
-                            .weight(1f)
-                            .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                             DigitKey("1") { inputDigit("1") }
                             DigitKey("2") { inputDigit("2") }
                             DigitKey("3") { inputDigit("3") }
                         }
-                        Row(Modifier
-                            .weight(1f)
-                            .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
                             BigDigitKey("0") { inputDigit("0") }
                             DigitKey(".") { inputDot() }
                         }
                     }
                     EqualKeyTall(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         onTap = { equalsNormal() },
                         onLong = {
                             when (validatePins(getDisplayText().trim())) {
@@ -402,110 +474,63 @@ private fun CalculatorScreen(
                     )
                 }
             } else {
-                // PAYSAGE (existant, rangées à poids égaux)
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                ) {
-                    FuncKey("(") { /* TODO */ }
-                    FuncKey(")") { /* TODO */ }
-                    FuncKey("1/x") { /* TODO */ }
+                // ----- PAYSAGE (scientifique) -----
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("(") { Toast.makeText(context, "Parenthèses non prises en charge (bientôt)", Toast.LENGTH_SHORT).show() }
+                    FuncKey(")") { Toast.makeText(context, "Parenthèses non prises en charge (bientôt)", Toast.LENGTH_SHORT).show() }
+                    FuncKey("1/x") { recip() }
                     MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
                 }
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                ) {
-                    FuncKey("x²") { /* TODO */ }    //X puissance 2
-                    FuncKey("x³") { /* TODO */ }    //X puissance 3
-                    FuncKey("xʸ") { /* TODO */ }    //X puissance y
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("x²") { square() }
+                    FuncKey("x³") { cube() }
+                    FuncKey("xʸ") { applyBinary(Op.POW) }
                     FuncKey("C") { clearAll() }
-                    OpKey("÷") { applyOp(Op.DIV) }
-                    OpKey("×") { applyOp(Op.MUL) }
+                    OpKey("÷") { applyBinary(Op.DIV) }
+                    OpKey("×") { applyBinary(Op.MUL) }
                     FuncKey("⌫") { backspace() }
                 }
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                ) {
-                    FuncKey("x!") { /* TODO */ }    //X factoriel
-                    FuncKey("√") { /* TODO */ }     //racine carré de X
-                    FuncKey("ʸ√X") { /* TODO */ }   //racine yème de X
-                    DigitKey("7") { inputDigit("7") }; DigitKey("8") { inputDigit("8") }; DigitKey("9") {
-                    inputDigit(
-                        "9"
-                    )
-                }; OpKey("−") { applyOp(Op.SUB) }
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("x!") { fact() }
+                    FuncKey("√")  { sqrtX() }
+                    FuncKey("ʸ√X"){ applyBinary(Op.ROOTN) }
+                    DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyBinary(Op.SUB)}
                 }
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                ) {
-                    FuncKey("e") { /* TODO */ }     //exponentiel de X
-                    FuncKey("ln") { /* TODO */ }    //ln de X
-                    FuncKey("lg") { /* TODO */ }    //lg de X
-                    DigitKey("4") { inputDigit("4") }; DigitKey("5") { inputDigit("5") }; DigitKey("6") {
-                    inputDigit(
-                        "6"
-                    )
-                }; OpKey("+") { applyOp(Op.ADD) }
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("e")  { setConstE() }
+                    FuncKey("ln") { lnX() }
+                    FuncKey("lg") { lgX() }
+                    DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyBinary(Op.ADD)}
                 }
 
-                // ───── Bloc final paysage : 2 rangées empilées à gauche + "=" vertical à droite ─────
                 Row(
-                    Modifier
-                        .weight(2f)                         // hauteur = 2 rangées
-                        .fillMaxWidth(),
+                    Modifier.weight(2f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    // À gauche = 6 colonnes (total), donc weight(6f)
                     Column(
-                        modifier = Modifier
-                            .weight(6f)                     // ← exactement 6 “colonnes”
-                            .fillMaxHeight(),
+                        modifier = Modifier.weight(6f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(KeyPadding)
                     ) {
-                        Row(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                        ) {
-                            FuncKey("sin") { /* TODO */ }
-                            FuncKey("cos") { /* TODO */ }
-                            FuncKey("tan") { /* TODO */ }
+                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                            FuncKey("sin") { trig({ sin(it) }, { asin(it) }) }
+                            FuncKey("cos") { trig({ cos(it) }, { acos(it) }) }
+                            FuncKey("tan") { trig({ tan(it) }, { atan(it) }) }
                             DigitKey("1") { inputDigit("1") }
                             DigitKey("2") { inputDigit("2") }
                             DigitKey("3") { inputDigit("3") }
                         }
-                        Row(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                        ) {
-                            FuncKey("Inv") { /* TODO */ }
-                            FuncKey("Rad") { /* TODO */ }
-                            FuncKey("π") { inputDigit("3.141592653589793") }
-                            DigitKey("%") {
-                                val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
-                                setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
-                                resetOnNextDigit = true
-                            }
+                        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                            FuncKey(if (invMode) "Inv⁻¹" else "Inv") { invMode = !invMode }
+                            FuncKey(if (radMode) "Rad" else "Deg") { radMode = !radMode }
+                            FuncKey("π") { setConstPi() }
+                            DigitKey("%") { percent() }
                             DigitKey("0") { inputDigit("0") }
                             DigitKey(".") { inputDot() }
                         }
                     }
-
-                    // À droite = 1 colonne (le “=”), donc weight(1f)
                     EqualKeyTall(
                         modifier = Modifier
-                            .weight(1f)                     // ← exactement 1 “colonne”
-                            //avoir un padding sur le coté gauche uniquement
+                            .weight(1f)
                             .padding(start = 8.dp)
                             .fillMaxHeight(),
                         onTap = { equalsNormal() },
@@ -521,7 +546,6 @@ private fun CalculatorScreen(
             }
         }
 
-        // ====== Padding bas 3% ======
         Spacer(Modifier.weight(weightBas))
     }
 
@@ -543,50 +567,38 @@ val KeyPadding = 8.dp
 
 @Composable
 private fun RowScope.DigitKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier
-        .weight(1f)
-        .fillMaxHeight(), onClick = onClick)
+    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), onClick = onClick)
 
 @Composable
 private fun RowScope.BigDigitKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier
-        .weight(2f)
-        .fillMaxHeight(), onClick = onClick)
+    KeyBase(label, modifier = Modifier.weight(2f).fillMaxHeight(), onClick = onClick)
 
 @Composable
 private fun RowScope.OpKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier
-        .weight(1f)
-        .fillMaxHeight(), container = KeyLight, onClick = onClick)
+    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyLight, onClick = onClick)
 
 @Composable
 private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier
-        .weight(1f)
-        .fillMaxHeight(), container = KeyLight, onClick = onClick)
+    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyLight, onClick = onClick)
 
 @Composable
 private fun RowScope.MemKey(label: String) =
-    KeyBase(label, modifier = Modifier
-        .weight(1f)
-        .fillMaxHeight(), container = KeyDark, contentColor = MemTextBlue, onClick = { })
+    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyDark, contentColor = MemTextBlue, onClick = { })
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
     Surface(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxHeight(),
+        modifier = Modifier.weight(1f).fillMaxHeight(),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.primary,
         tonalElevation = 3.dp,
         shadowElevation = 3.dp,
         onClick = onTap
     ) {
-        Box(Modifier
-            .fillMaxSize()
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-            contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center
+        ) {
             Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
@@ -595,25 +607,23 @@ private fun RowScope.MemKey(label: String) =
 @OptIn(ExperimentalFoundationApi::class)
 @Composable private fun RowScope.EqualKeyWide(onTap: () -> Unit, onLong: () -> Unit) {
     Surface(
-        modifier = Modifier
-            .weight(2f)
-            .fillMaxHeight(),
+        modifier = Modifier.weight(2f).fillMaxHeight(),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.primary,
         tonalElevation = 3.dp,
         shadowElevation = 3.dp,
         onClick = onTap
     ) {
-        Box(Modifier
-            .fillMaxSize()
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-            contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center
+        ) {
             Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
 
-/** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
+/** “=” vertical (deux rangées) */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable private fun EqualKeyTall(
     modifier: Modifier = Modifier,
@@ -628,10 +638,10 @@ private fun RowScope.MemKey(label: String) =
         shadowElevation = 3.dp,
         onClick = onTap
     ) {
-        Box(Modifier
-            .fillMaxSize()
-            .combinedClickable(onClick = onTap, onLongClick = onLong),
-            contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().combinedClickable(onClick = onTap, onLongClick = onLong),
+            contentAlignment = Alignment.Center
+        ) {
             Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
