@@ -414,8 +414,9 @@ private fun CalculatorScreen(
                 Row(Modifier
                     .weight(1f)
                     .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("x²") { /* TODO */ }
-                    FuncKey("x³") { /* TODO */ }
+                    FuncKey("x²") { /* TODO */ }    //X puissance 2
+                    FuncKey("x³") { /* TODO */ }    //X puissance 3
+                    FuncKey("xʸ") { /* TODO */ }    //X puissance y
                     FuncKey("C") { clearAll() }
                     OpKey("÷") { applyOp(Op.DIV) }
                     OpKey("×") { applyOp(Op.MUL) }
@@ -424,16 +425,25 @@ private fun CalculatorScreen(
                 Row(Modifier
                     .weight(1f)
                     .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("x!") { /* TODO */ }    //X factoriel
+                    FuncKey("√") { /* TODO */ }     //racine carré de X
+                    FuncKey("ʸ√X") { /* TODO */ }   //racine yème de X
                     DigitKey("7"){inputDigit("7")}; DigitKey("8"){inputDigit("8")}; DigitKey("9"){inputDigit("9")}; OpKey("−"){applyOp(Op.SUB)}
                 }
                 Row(Modifier
                     .weight(1f)
                     .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("e") { /* TODO */ }     //exponentiel de X
+                    FuncKey("ln") { /* TODO */ }    //ln de X
+                    FuncKey("lg") { /* TODO */ }    //lg de X
                     DigitKey("4"){inputDigit("4")}; DigitKey("5"){inputDigit("5")}; DigitKey("6"){inputDigit("6")}; OpKey("+"){applyOp(Op.ADD)}
                 }
                 Row(Modifier
                     .weight(1f)
                     .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
+                    FuncKey("sin") { /* TODO */ }   //sin de X
+                    FuncKey("cos") { /* TODO */ }   //cos de X
+                    FuncKey("tan") { /* TODO */ }   //tan de X
                     DigitKey("1"){inputDigit("1")}; DigitKey("2"){inputDigit("2")}; DigitKey("3"){inputDigit("3")}
                     EqualKey(onTap = { equalsNormal() }, onLong = {
                         when (validatePins(getDisplayText().trim())) {
@@ -446,14 +456,17 @@ private fun CalculatorScreen(
                 Row(Modifier
                     .weight(1f)
                     .fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("%") {
+                    FuncKey("Inv") { /* TODO */ }   //Inv
+                    FuncKey("Rad") { /* TODO */ }   //Rad
+                    FuncKey("π") {inputDigit("3.141592653589793")}     //pi
+                    DigitKey("%") {
                         val v = getDisplayText().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
                         setDisplayText(formatForDisplay(v.divide(BigDecimal(100), mc)))
                         resetOnNextDigit = true
                     }
-                    BigDigitKey("0") { inputDigit("0") }
+                    DigitKey("0") { inputDigit("0") }
                     DigitKey(".") { inputDot() }
-                    EqualKeyWide(onTap = { equalsNormal() }, onLong = {
+                    EqualKey(onTap = { equalsNormal() }, onLong = {
                         when (validatePins(getDisplayText().trim())) {
                             PinResult.SECRET -> onUnlock()
                             PinResult.DURESS -> onDuress()
