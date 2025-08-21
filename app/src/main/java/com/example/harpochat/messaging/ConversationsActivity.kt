@@ -22,6 +22,7 @@ class ConversationsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        actionBar?.hide()
         setContent {
             // Thème sombre par défaut ; tu pourras brancher celui de l’app plus tard
             MaterialTheme(colorScheme = darkColorScheme()) {
