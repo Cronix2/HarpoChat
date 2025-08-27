@@ -31,6 +31,10 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+
 
 /* ---------- Palette sombre ---------- */
 private val ChatBg = Color(0xFF0F1115)
@@ -60,7 +64,8 @@ fun ChatScreen(
     onSend: (String) -> Unit,
     onRetry: () -> Unit,            // conservé pour compat avec ton Activity
     title: String = "Conversation",
-    avatarInitial: String = title.firstOrNull()?.uppercase() ?: "?"
+    avatarInitial: String = title.firstOrNull()?.uppercase() ?: "?",
+    onBack: () -> Unit = {}
 ) {
     var draft by remember { mutableStateOf("") }
 
@@ -91,6 +96,18 @@ fun ChatScreen(
                             .padding(horizontal = 20.dp, vertical = 30.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // ← Bouton retour
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Retour",
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(Modifier.width(10.dp))
+
+                        // Avatar
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFF2A2F3A),
@@ -104,7 +121,10 @@ fun ChatScreen(
                                 )
                             }
                         }
+
                         Spacer(Modifier.width(10.dp))
+
+                        // Titre
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleMedium,
