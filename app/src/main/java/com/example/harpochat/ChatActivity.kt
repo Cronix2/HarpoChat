@@ -13,6 +13,7 @@ import com.example.harpochat.ui.ChatScreen
 import com.example.harpochat.ui.ChatViewModel
 
 class ChatActivity : ComponentActivity() {
+
     companion object {
         const val EXTRA_THREAD_ID = "thread_id"
     }
@@ -22,21 +23,27 @@ class ChatActivity : ComponentActivity() {
         enableEdgeToEdge()
         actionBar?.hide()
 
-        // You can use this later with your ViewModel (e.g. vm.openThread(threadId))
+        // Récupère l'identifiant du fil (si tu en envoies un depuis la liste)
         val threadId: String = intent.getStringExtra(EXTRA_THREAD_ID) ?: "default"
 
         setContent {
             MaterialTheme {
                 Surface {
                     val vm: ChatViewModel = viewModel()
+
+                    // Si tu as une méthode d’ouverture de fil dans le VM, tu peux l’appeler ici
+                    // La laisser commentée si elle n’existe pas encore.
+                    // La première fois seulement, typiquement via LaunchedEffect(threadId) { vm.openThread(threadId) }
+
                     val messages by vm.messages.collectAsState(initial = emptyList())
 
                     ChatScreen(
                         messages = messages,
                         onSend = vm::send,
-                        onRetry = { /* plus tard */ },
-                        title = "Alice",           // ou le nom du groupe
-                        avatarInitial = "A"        // facultatif, dérivé de title si omis
+                        onRetry = { /* TODO: gérer un retry d’envoi si besoin */ },
+                        title = "Alice",       // ou le nom du groupe/conversation
+                        avatarInitial = "A",
+                        onBack = { finish() }  // <- **NOUVEAU** : branche le bouton retour du cartouche
                     )
                 }
             }
