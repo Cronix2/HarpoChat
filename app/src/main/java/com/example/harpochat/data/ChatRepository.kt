@@ -1,36 +1,64 @@
 package com.example.harpochat.data
 
-import com.example.harpochat.crypto.SignalCryptoEngine
-import com.example.harpochat.ui.ChatMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Source de vérité locale pour la liste des messages.
+ * Pas (encore) de réseau : on simule l’ACK et une réponse bot.
+ */
 class ChatRepository {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    private var nextId = 1L
-    private val scope = CoroutineScope(Dispatchers.IO)
+    /** Envoi d’un message « moi ». */
+    fun send(text: String) {
+        if (text.isBlank()) return
+        val outgoing = ChatMessage(
+            text = text.trim(),
+            sender = Sender.Me,
+            status = MessageStatus.Sending
+        )
+        // Ajoute le message
+        _messages.value = _messages.value + outgoing
 
-    private val crypto = SignalCryptoEngine().also {
-        scope.launch { it.generateIdentity() } // init async
-    }
-
-    fun sendLocal(text: String) {
-        // Envoi: me -> peer (E2EE), puis déchiffrement côté peer (loopback) pour affichage
+        // Simule l’ACK réseau → Sent
         scope.launch {
-            val ct = crypto.encrypt(text.toByteArray(), peerId = "peer")
-            val pt = crypto.decrypt(ct, peerId = "me")
-            val echo = String(pt)
+            delay(250)
+            updateStatus(outgoing.id, MessageStatus.Sent)
 
-            // MAJ UI sur le thread principal pas nécessaire ici car StateFlow (on reste simple)
-            _messages.value = listOf(
-                ChatMessage(nextId++, text, isMe = true),
-                ChatMessage(nextId++, "(${ct.size} bytes chiffrés) $echo", isMe = false)
-            ) + _messages.value
+            // Simule une réponse « bot » après un petit délai
+            delay(600)
+            addIncoming("Réçu: ${outgoing.text}")
         }
     }
+
+    /** Ajoute un message entrant (expéditeur « Other »). */
+    fun addIncoming(text: String) {
+        val incoming = ChatMessage(
+            text = text,
+            sender = Sender.Other,
+            status = MessageStatus.Delivered
+        )
+        _messages.value = _messages.value + incoming
+    }
+
+    /** Met à jour le statut d’un message par id. */
+    fun updateStatus(id: String, status: MessageStatus) {
+        _messages.value = _messages.value.map { msg ->
+            if (msg.id == id) msg.copy(status = status) else msg
+        }
+    }
+
+    /** Marque un message comme « lu ». */
+    fun markRead(id: String) = updateStatus(id, MessageStatus.Read)
 }

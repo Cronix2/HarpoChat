@@ -68,4 +68,6 @@ dependencies {
     // Protocole Signal (Java)
     implementation("org.whispersystems:signal-protocol-java:2.8.1")
 
+    implementation("androidx.compose.material:material-icons-extended:<compose-version>")
+
 }
