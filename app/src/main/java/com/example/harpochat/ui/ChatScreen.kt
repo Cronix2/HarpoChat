@@ -252,7 +252,8 @@ private fun MessageBubble(msg: ChatMsg) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .align(Alignment.End),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
