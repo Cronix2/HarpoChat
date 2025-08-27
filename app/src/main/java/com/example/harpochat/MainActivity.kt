@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                     val messages by vm.messages.collectAsState()   // <-- observe le flow
                     ChatScreen(
                         messages = messages,
-                        onSend = vm::send
+                        onSend = vm::send,
+                        onRetry  = { vm.loadThread() }
                     )
                 }
             }
