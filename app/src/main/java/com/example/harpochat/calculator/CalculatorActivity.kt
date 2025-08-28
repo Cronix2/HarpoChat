@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.example.harpochat.data.DbCrypto
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
 import java.math.BigDecimal
@@ -65,6 +66,8 @@ class CalculatorActivity : ComponentActivity() {
                     CalculatorScreen(
                         onUnlock = { startActivity(Intent(this, ConversationsActivity::class.java)) },
                         onDuress = {
+                            DbCrypto.wipe(this)
+                            deleteDatabase("harpo_encrypted.db")
                             prefs.edit { clear() }
                             Toast.makeText(this, "Memory cleared", Toast.LENGTH_SHORT).show()
                         },

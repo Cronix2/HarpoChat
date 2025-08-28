@@ -1,10 +1,12 @@
 package com.example.harpochat.messaging
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,19 +19,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.harpochat.ChatActivity   // ⟵ use this if you created ChatActivity with EXTRA_THREAD_ID
+// import com.example.harpochat.MainActivity // ⟵ fallback: uncomment and use MainActivity instead
 
 class ConversationsActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        actionBar?.hide()
+
         setContent {
-            // Thème sombre par défaut ; tu pourras brancher celui de l’app plus tard
             MaterialTheme(colorScheme = darkColorScheme()) {
-                ConversationListScreen()
+                ConversationListScreen(
+                    onOpen = { id -> openChat(id) }   // ⟵ wire row clicks to openChat()
+                )
             }
         }
     }
+
+    private fun openChat(conversationId: String) {
+        // Target ChatActivity (recommended). If you don’t have it yet, swap for MainActivity.
+        val intent = Intent(this, ChatActivity::class.java)
+            .putExtra(ChatActivity.EXTRA_THREAD_ID, conversationId)
+        // val intent = Intent(this, MainActivity::class.java).putExtra("thread_id", conversationId)
+        startActivity(intent)
+    }
 }
+
+/* ---------------- models ---------------- */
 
 data class ConversationPreview(
     val id: String,
@@ -39,9 +57,13 @@ data class ConversationPreview(
     val unread: Int = 0
 )
 
-@OptIn(ExperimentalMaterial3Api::class) // <-- opt-in pour TopAppBar
+/* ---------------- UI ---------------- */
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConversationListScreen() {
+private fun ConversationListScreen(
+    onOpen: (String) -> Unit
+) {
     val chats = remember {
         mutableStateListOf(
             ConversationPreview("1", "Alice", "On se voit ce soir ?", "18:42", 2),
@@ -55,7 +77,7 @@ private fun ConversationListScreen() {
             TopAppBar(
                 title = { Text("HarpoChat") },
                 actions = {
-                    IconButton(onClick = { /* TODO : Settings (PIN, préférences) */ }) {
+                    IconButton(onClick = { /* TODO : Settings */ }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Menu")
                     }
                 }
@@ -74,18 +96,25 @@ private fun ConversationListScreen() {
                 .padding(padding)
         ) {
             items(chats) { conv ->
-                ConversationRow(conv)
-                HorizontalDivider(color = Color(0xFF1E2430)) // <-- remplace Divider
+                ConversationRow(
+                    c = conv,
+                    onClick = { onOpen(conv.id) }   // ⟵ pass the ID up
+                )
+                HorizontalDivider(color = Color(0xFF1E2430))
             }
         }
     }
 }
 
 @Composable
-private fun ConversationRow(c: ConversationPreview) {
+private fun ConversationRow(
+    c: ConversationPreview,
+    onClick: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)           // ⟵ make the row clickable
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
