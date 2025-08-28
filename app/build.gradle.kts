@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt") // nécessaire pour Room        // <= pour l’annotation processor Room
 }
 
 android {
@@ -69,5 +70,21 @@ dependencies {
     implementation("org.whispersystems:signal-protocol-java:2.8.1")
 
     implementation("androidx.compose.material:material-icons-extended:<compose-version>")
+
+    // ========= Room =========
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    kapt("androidx.room:room-compiler:$roomVersion")
+
+    // ========= SQLCipher (SupportFactory) =========
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+
+    // (optionnel) sqlite-ktx utilitaires
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+
+    // Compose (si pas déjà)
+    implementation("androidx.compose.runtime:runtime:1.6.8")
+    implementation("androidx.activity:activity-compose:1.9.0")
 
 }

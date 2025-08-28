@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.harpochat.ui.ChatScreen
 import com.example.harpochat.ui.ChatViewModel
+import androidx.compose.runtime.LaunchedEffect
 
 class ChatActivity : ComponentActivity() {
 
@@ -31,6 +32,9 @@ class ChatActivity : ComponentActivity() {
                 Surface {
                     val vm: ChatViewModel = viewModel()
 
+                    LaunchedEffect(Unit) {
+                        vm.openThread(threadId, "Alice")
+                    }
                     // Si tu as une méthode d’ouverture de fil dans le VM, tu peux l’appeler ici
                     // La laisser commentée si elle n’existe pas encore.
                     // La première fois seulement, typiquement via LaunchedEffect(threadId) { vm.openThread(threadId) }
@@ -48,5 +52,6 @@ class ChatActivity : ComponentActivity() {
                 }
             }
         }
+
     }
 }
