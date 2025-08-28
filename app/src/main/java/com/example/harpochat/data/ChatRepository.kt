@@ -1,64 +1,127 @@
 package com.example.harpochat.data
 
+import android.content.Context
+import com.example.harpochat.ui.ChatMsg
+import com.example.harpochat.ui.MessageStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
- * Source de vérité locale pour la liste des messages.
- * Pas (encore) de réseau : on simule l’ACK et une réponse bot.
+ * Repository persistant (Room + SQLCipher) avec un petit simulateur réseau.
+ * - messages(threadId): Flow<List<ChatMsg>>
+ * - sendLocal(threadId, text): insère en SENDING, simule ACK → SENT, puis faux incoming DELIVERED
+ * - addIncoming(threadId, text): insère un message côté "other"
+ * - updateStatus / markRead : maj de statut
  */
-class ChatRepository {
+class ChatRepository private constructor(
+    private val db: AppDatabase,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val msgDao = db.messageDao()
+    private val threadDao = db.threadDao()
 
-    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+    /* ---------- Mapping Room -> UI ---------- */
 
-    /** Envoi d’un message « moi ». */
-    fun send(text: String) {
-        if (text.isBlank()) return
-        val outgoing = ChatMessage(
-            text = text.trim(),
-            sender = Sender.Me,
-            status = MessageStatus.Sending
+    fun messages(threadId: String): Flow<List<ChatMsg>> =
+        msgDao.messagesFlow(threadId).map { list ->
+            list.map { it.toUi() }
+        }
+
+    private fun MessageEntity.toUi(): ChatMsg =
+        ChatMsg(
+            id = id,
+            text = body,
+            time = time,
+            isMine = sender == "me",
+            status = when (status) {
+                0 -> MessageStatus.SENDING
+                1 -> MessageStatus.SENT
+                2 -> MessageStatus.DELIVERED
+                3 -> MessageStatus.READ
+                else -> MessageStatus.SENT
+            }
         )
-        // Ajoute le message
-        _messages.value = _messages.value + outgoing
 
-        // Simule l’ACK réseau → Sent
+    private fun MessageStatus.toDb(): Int = when (this) {
+        MessageStatus.SENDING   -> 0
+        MessageStatus.SENT      -> 1
+        MessageStatus.DELIVERED -> 2
+        MessageStatus.READ      -> 3
+    }
+
+    /* ---------- Threads ---------- */
+
+    suspend fun ensureThread(id: String, title: String) {
+        threadDao.upsert(ThreadEntity(id, title))
+    }
+
+    /* ---------- Envoi local + simulateur ---------- */
+
+    suspend fun sendLocal(threadId: String, text: String) {
+        if (text.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        val localId = UUID.randomUUID().toString()
+
+        val outgoing = MessageEntity(
+            id = localId,
+            threadId = threadId,
+            sender = "me",
+            body = text.trim(),
+            time = now,
+            status = MessageStatus.SENDING.toDb()
+        )
+
+        // 1) on écrit en base en SENDING
+        msgDao.insert(outgoing)
+
+        // 2) simulateur: ACK réseau → SENT
         scope.launch {
             delay(250)
-            updateStatus(outgoing.id, MessageStatus.Sent)
+            msgDao.setStatus(localId, MessageStatus.SENT.toDb())
 
-            // Simule une réponse « bot » après un petit délai
+            // 3) simulateur: réponse du "correspondant"
             delay(600)
-            addIncoming("Réçu: ${outgoing.text}")
+            addIncoming(threadId, "Reçu: ${outgoing.body}")
         }
     }
 
-    /** Ajoute un message entrant (expéditeur « Other »). */
-    fun addIncoming(text: String) {
-        val incoming = ChatMessage(
-            text = text,
-            sender = Sender.Other,
-            status = MessageStatus.Delivered
+    /* ---------- Incoming (simulateur ou vrai réseau plus tard) ---------- */
+
+    suspend fun addIncoming(threadId: String, text: String) {
+        val incoming = MessageEntity(
+            id = UUID.randomUUID().toString(),
+            threadId = threadId,
+            sender = "other",
+            body = text,
+            time = System.currentTimeMillis(),
+            status = MessageStatus.DELIVERED.toDb()
         )
-        _messages.value = _messages.value + incoming
+        msgDao.insert(incoming)
     }
 
-    /** Met à jour le statut d’un message par id. */
-    fun updateStatus(id: String, status: MessageStatus) {
-        _messages.value = _messages.value.map { msg ->
-            if (msg.id == id) msg.copy(status = status) else msg
+    /* ---------- MAJ de statut ---------- */
+
+    suspend fun updateStatus(id: String, status: MessageStatus) {
+        msgDao.setStatus(id, status.toDb())
+    }
+
+    suspend fun markRead(id: String) = updateStatus(id, MessageStatus.READ)
+
+    /* ---------- Factory ---------- */
+
+    companion object {
+        fun create(ctx: Context): ChatRepository {
+            val factory = DbCrypto.supportFactory(ctx) // SQLCipher passphrase via Keystore
+            val db = AppDatabase.build(ctx, factory)
+            return ChatRepository(db)
         }
     }
-
-    /** Marque un message comme « lu ». */
-    fun markRead(id: String) = updateStatus(id, MessageStatus.Read)
 }

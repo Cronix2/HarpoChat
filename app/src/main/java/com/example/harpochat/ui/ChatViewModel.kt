@@ -1,64 +1,72 @@
 package com.example.harpochat.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.example.harpochat.data.ChatRepository
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
- * ViewModel minimal pour le chat, compatible avec:
- * data class ChatMsg(val id: String, val text: String, val time: Any, val mine: Boolean)
+ * ViewModel branché sur Room (via ChatRepository).
+ * - Expose messages en Flow<StateFlow<List<ChatMsg>>> pour le fil courant
+ * - openThread(id, title) pour changer de conversation (et la créer si besoin)
+ * - send(text) pour envoyer (insère en SENDING puis simule ACK → SENT + réponse entrante)
+ * - addIncoming / markRead / updateStatus si besoin
  */
-class ChatViewModel : ViewModel() {
+class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _messages = MutableStateFlow<List<ChatMsg>>(emptyList())
-    val messages = _messages.asStateFlow()
+    private val repo = ChatRepository.create(app)
 
-    /** À appeler depuis ChatActivity si tu veux précharger un fil */
-    fun loadThread(threadId: String? = null) {
-        // Exemple de seed: vide par défaut
-        _messages.value = emptyList()
-    }
+    /** Fil de discussion courant (simple état mémoire). */
+    private val currentThreadId = MutableStateFlow("thread-alice")
 
-    /** Envoie un message "moi" */
-    fun send(text: String) {
-        val trimmed = text.trim()
-        if (trimmed.isEmpty()) return
-
-        val msg = ChatMsg(
-            id   = UUID.randomUUID().toString(),
-            text = trimmed,
-            time = System.currentTimeMillis(),   // Long epoch -> formaté en "HH:mm" par ChatScreen
-            isMine = true
-        )
-        viewModelScope.launch {
-            _messages.value = _messages.value + msg
-
-            // (facultatif) petite réponse simulée pour tester l’UI
-            delay(500)
-            val echo = ChatMsg(
-                id   = UUID.randomUUID().toString(),
-                text = "Reçu: $trimmed",
-                time = System.currentTimeMillis(),
-                isMine = false
+    /** Flux des messages du fil courant, prêt à être collecté par l’UI. */
+    val messages: StateFlow<List<ChatMsg>> =
+        currentThreadId
+            .flatMapLatest { threadId -> repo.messages(threadId) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyList()
             )
-            _messages.value = _messages.value + echo
+
+    /**
+     * Ouvre (ou crée si besoin) un fil de discussion identifié par [id].
+     * [title] sert au stockage du fil (affichage liste, etc.).
+     */
+    fun openThread(id: String, title: String) {
+        viewModelScope.launch {
+            repo.ensureThread(id, title)
+            currentThreadId.value = id
         }
     }
 
-    /** Pour injecter un message entrant (ex: push réseau) */
-    fun addIncoming(text: String) {
-        val incoming = ChatMsg(
-            id   = UUID.randomUUID().toString(),
-            text = text,
-            time = System.currentTimeMillis(),
-            isMine = false
-        )
-        _messages.value = _messages.value + incoming
+    /** Envoie un message dans le fil courant. */
+    fun send(text: String) {
+        viewModelScope.launch {
+            repo.sendLocal(currentThreadId.value, text)
+        }
     }
 
-    fun clear() { _messages.value = emptyList() }
+    /** Injecte un message entrant (utile pour tests réseau ou notifications). */
+    fun addIncoming(text: String) {
+        viewModelScope.launch {
+            repo.addIncoming(currentThreadId.value, text)
+        }
+    }
+
+    /** Marque un message comme 'lu'. */
+    fun markRead(messageId: String) {
+        viewModelScope.launch {
+            repo.markRead(messageId)
+        }
+    }
+
+    /** Met à jour un statut arbitraire (SENDING/SENT/DELIVERED/READ). */
+    fun updateStatus(messageId: String, status: MessageStatus) {
+        viewModelScope.launch {
+            repo.updateStatus(messageId, status)
+        }
+    }
 }
