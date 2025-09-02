@@ -2,9 +2,12 @@ package com.example.harpochat.messaging
 
 import android.content.Intent
 import android.os.Bundle
+import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -85,9 +88,25 @@ class ConversationsActivity : ComponentActivity() {
                 var showCreateDialog by remember { mutableStateOf(false) }
                 var newTitle by remember { mutableStateOf(TextFieldValue("")) }
 
-                fun openQrScanner() {
-                    startActivity(Intent(this@ConversationsActivity, QrActivity::class.java))
+                val context = this@ConversationsActivity
+                val qrLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) { res ->
+                    if (res.resultCode == Activity.RESULT_OK) {
+                        val payload = res.data?.getStringExtra("qr") ?: return@rememberLauncherForActivityResult
+                        // TODO: décoder le payload (id+nom par ex.) et créer/ouvrir le thread
+                        // ex rapide :
+                        val id = payload // à adapter
+                        val title = payload.take(24)
+                        vm.createThread(id, title)
+                        context.startActivity(
+                            Intent(context, ChatActivity::class.java)
+                                .putExtra(ChatActivity.EXTRA_THREAD_ID, id)
+                                .putExtra("extra_title", title)
+                        )
+                    }
                 }
+
 
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("HarpoChat") }) },
@@ -132,7 +151,7 @@ class ConversationsActivity : ComponentActivity() {
                                 tint = ConvColors.iconDefault
                             ) {
                                 showSheet = false
-                                openQrScanner()
+                                qrLauncher.launch(Intent(context, QrActivity::class.java))
                             }
 
                             HorizontalDivider(color = ConvColors.divider)
