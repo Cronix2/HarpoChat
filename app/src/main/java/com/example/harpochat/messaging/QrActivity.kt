@@ -44,6 +44,10 @@ import com.journeyapps.barcodescanner.BarcodeEncoder
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.Executors
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 
 /* =========================================================
  * Activity
@@ -235,7 +239,7 @@ private fun QrScannerView(
             scanner.process(image)
                 .addOnSuccessListener { barcodes ->
                     val txt = barcodes.firstOrNull { it.rawValue != null }?.rawValue
-                    if (!txt.isNullOrBlank() && !pausedState) onDecodedState(txt)
+                    if (!txt.isNullOrBlank()) onDecodedState(txt)
                 }
                 .addOnCompleteListener { imageProxy.close() }
         }
@@ -293,16 +297,15 @@ private fun QrGeneratorView(
 ) {
     val periodSec = 60
 
-    // ID du fil (conservé tant qu'on ne force pas un nouveau fil)
+    // ID du fil (conservé tant qu’on ne force pas un nouveau fil)
     var threadId by remember { mutableStateOf(UUID.randomUUID().toString()) }
 
     // Contenu courant du QR + contrôle du cycle
-    // ⬇︎ types spécialisés
     var qrText by remember { mutableStateOf("") }
     var cycleStartMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var secLeft by remember { mutableIntStateOf(periodSec) }
 
-    // Fonction de (ré)génération, utilisée à l'initialisation, à l’expiration et quand on force
+    // Génère le contenu du QR pour le cycle en cours
     fun regenNow() {
         val invite = makeInviteNow(
             fromUserId = meId,
@@ -313,26 +316,29 @@ private fun QrGeneratorView(
         qrText = encodeInvite(invite)
     }
 
-    // Boucle d’anim/timing : une seule source de vérité pilote l’affichage et le changement de QR
-    LaunchedEffect(meId, meName, threadId, cycleStartMs) {
-        regenNow()                      // régénère immédiatement au début du cycle
-        secLeft = periodSec             // timer plein
+    // Une seule boucle pilote le timer + la régénération du QR
+    LaunchedEffect(meId, meName, threadId) {
+        cycleStartMs = System.currentTimeMillis()
+        regenNow()
+        secLeft = periodSec
+
         while (true) {
             val now = System.currentTimeMillis()
             val elapsed = ((now - cycleStartMs) / 1000).toInt().coerceAtLeast(0)
             val left = (periodSec - (elapsed % periodSec))
             if (left != secLeft) secLeft = left
 
-            if (elapsed >= periodSec) { // fin de cycle → nouveau QR + reset timer
+            if (elapsed >= periodSec) {
                 cycleStartMs = now
                 regenNow()
                 secLeft = periodSec
             }
-            kotlinx.coroutines.delay(200L) // tick fluide (5 Hz), précis et léger
+            // ~60 fps pour une progression bien fluide
+            kotlinx.coroutines.delay(16L)
         }
     }
 
-    // Bitmap du QR
+    // Bitmap du QR (recalculé quand qrText change)
     val bitmap = remember(qrText) {
         try {
             val enc = BarcodeEncoder()
@@ -346,19 +352,15 @@ private fun QrGeneratorView(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Badge au-dessus, aligné à droite, pas superposé au QR
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            MinuteCountdownBadge(
-                secLeft = secLeft,
-                periodSec = periodSec,
-                modifier = Modifier.size(56.dp)
-            )
-        }
-        Spacer(Modifier.height(8.dp))
+        // Badge TIMER : centré horizontalement, au-dessus du QR
+        MinuteCountdownBadge(
+            periodSec = periodSec,
+            cycleStartMs = cycleStartMs,
+            modifier = Modifier.size(64.dp)
+        )
+
+
+        Spacer(Modifier.height(12.dp))
 
         if (bitmap != null) {
             Image(
@@ -391,22 +393,60 @@ private fun QrGeneratorView(
  * Badge circulaire (compte à rebours d’une minute)
  * ========================================================= */
 @Composable
-private fun MinuteCountdownBadge(
-    secLeft: Int,
+fun MinuteCountdownBadge(
     periodSec: Int,
+    cycleStartMs: Long,
     modifier: Modifier = Modifier
 ) {
-    // Progression **horaire** : on affiche la part ÉCOULÉE, pas la part restante
-    val progress = 1f - (secLeft / periodSec.toFloat())
+    val periodMs = periodSec * 1000L
+
+    // horloge fluide ~60fps
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(periodSec, cycleStartMs) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            withFrameNanos { } // cadence sur le rendu
+        }
+    }
+
+    val elapsedMs = (nowMs - cycleStartMs).coerceAtLeast(0L)
+    val remainingMs = (periodMs - (elapsedMs % periodMs))
+    val secLeft = ((remainingMs + 999) / 1000).toInt()
+
+    // progress en sens horaire → 0f = vide, 1f = plein
+    val progress = remainingMs.toFloat() / periodMs.toFloat()
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(
-            progress = { progress },                 // 0 → 1 (sens horaire)
-            strokeWidth = 6.dp,
-            trackColor = AppColors.Muted.copy(alpha = 0.35f),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.matchParentSize()
-        )
+        // Fond
+        Canvas(Modifier.matchParentSize()) {
+            val stroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+            val inset = stroke.width / 2
+            val rect = Rect(inset, inset, size.width - inset, size.height - inset)
+
+            // piste grise complète
+            drawArc(
+                color = AppColors.Muted.copy(alpha = 0.25f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = rect.topLeft,
+                size = rect.size,
+                style = stroke
+            )
+
+            // arc en sens horaire
+            drawArc(
+                color = AppColors.Timer,
+                startAngle = -90f,
+                sweepAngle = -360f * progress, // ← négatif = sens horaire
+                useCenter = false,
+                topLeft = rect.topLeft,
+                size = rect.size,
+                style = stroke
+            )
+        }
+
+        // texte numérique au centre
         Text(
             text = secLeft.toString(),
             style = MaterialTheme.typography.labelLarge,

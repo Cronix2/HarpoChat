@@ -30,4 +30,5 @@ object AppColors {
     // accents / icônes
     val Accent        = Color(0xFF4C6FFF)
     val IconDefault   = Color(0xFFE7EEF7)
+    val Timer         = Color(0xFF00FF00)
 }
