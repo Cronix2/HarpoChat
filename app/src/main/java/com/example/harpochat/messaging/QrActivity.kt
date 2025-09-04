@@ -1,6 +1,7 @@
 package com.example.harpochat.messaging
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,15 +29,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.harpochat.link.*
+import com.example.harpochat.ChatActivity
+import com.example.harpochat.data.ChatRepository
+import com.example.harpochat.qr.QrInvite
+import com.example.harpochat.qr.decodeInvite
+import com.example.harpochat.qr.encodeInvite
+import com.example.harpochat.qr.isInviteExpired
+import com.example.harpochat.qr.makeInviteNow
 import com.example.harpochat.ui.theme.AppColors
 import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.zxing.BarcodeFormat
 import com.journeyapps.barcodescanner.BarcodeEncoder
+import kotlinx.coroutines.launch
+import java.util.UUID
 import java.util.concurrent.Executors
 
+/* =========================================================
+ * Activity
+ * ========================================================= */
 class QrActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,33 +57,28 @@ class QrActivity : ComponentActivity() {
     }
 }
 
-@androidx.annotation.OptIn(ExperimentalGetImage::class)
+/* =========================================================
+ * Écran principal avec onglets
+ * ========================================================= */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QrScreen(onBack: () -> Unit) {
     val tabs = listOf("Scanner", "Générer")
     var selected by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
-    // ---------- existing INVITE state (côté A) ----------
-    val myInvite by remember {
-        mutableStateOf(
-            InvitePayload(
-                inviteId = java.util.UUID.randomUUID().toString(),
-                aIdPub = DemoCrypto.genPublicKey(),
-                oneTimeCode = DemoCrypto.genCode(),
-                expiresAt = System.currentTimeMillis() + 10 * 60 * 1000
-            )
-        )
-    }
-    val inviteWire = remember(myInvite) { myInvite.toWire() }
+    // Repo Room (création thread locale quand on “accepte” une invite scannée)
+    val ctx = LocalContext.current
+    val repo = remember { ChatRepository.create(ctx.applicationContext) }
 
-    // Observe join requests for my invite (unchanged)
-    val mailboxRequests by InMemoryMailbox.requests.collectAsState()
-    val pendingForMe = mailboxRequests[myInvite.inviteId].orEmpty()
+    // Profil local minimal (remplaçable plus tard)
+    val myUserId = remember { UUID.randomUUID().toString() }
+    val myUserName = remember { android.os.Build.MODEL ?: "Moi" }
 
-    // ---------- NEW: confirmation state for scan (côté B) ----------
-    var paused by remember { mutableStateOf(false) }                  // pause analyzer
-    var pendingInvite by remember { mutableStateOf<InvitePayload?>(null) } // invite decoded awaiting user choice
+    // État scanneur / popup / info
+    var paused by remember { mutableStateOf(false) }
+    var pendingInvite by remember { mutableStateOf<QrInvite?>(null) }
+    var infoMsg by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Scaffold(
@@ -96,38 +102,53 @@ private fun QrScreen(onBack: () -> Unit) {
             ) {
                 TabRow(selectedTabIndex = selected, containerColor = AppColors.Sheet) {
                     tabs.forEachIndexed { i, label ->
-                        Tab(selected = selected == i, onClick = { selected = i }, text = { Text(label) })
+                        Tab(
+                            selected = selected == i,
+                            onClick = { selected = i },
+                            text = { Text(label) }
+                        )
                     }
                 }
 
                 when (selected) {
-                    // ----- SCANNER (côté B) -----
+                    // ---------- SCANNER ----------
                     0 -> QrScannerView(
                         modifier = Modifier.weight(1f),
-                        paused = paused,                                     // ← NEW
-                        onDecoded = { wire ->
-                            val invite = InvitePayload.fromWire(wire)
-                            if (invite != null && invite.expiresAt > System.currentTimeMillis()) {
-                                paused = true
-                                pendingInvite = invite                         // ← triggers dialog
+                        paused = paused,
+                        onDecoded = { raw ->
+                            val result = decodeInvite(raw)
+                            result.onSuccess { inv ->
+                                if (isInviteExpired(inv)) {
+                                    infoMsg = "Ce QR code a expiré."
+                                } else {
+                                    paused = true
+                                    pendingInvite = inv
+                                }
+                            }.onFailure {
+                                infoMsg = "QR invalide pour HarpoChat."
                             }
                         }
                     )
 
-                    // ----- GENERATE (côté A) -----
-                    1 -> QrGeneratorAndInbox(
-                        content = inviteWire,
-                        pending = pendingForMe,
-                        onAccept = {
-                            InMemoryMailbox.decide(InviteDecision(myInvite.inviteId, accept = true))
-                        },
-                        onReject = {
-                            InMemoryMailbox.decide(InviteDecision(myInvite.inviteId, accept = false))
-                        }
+                    // ---------- GÉNÉRER ----------
+                    1 -> QrGeneratorView(
+                        modifier = Modifier.weight(1f),
+                        meId = myUserId,
+                        meName = myUserName
                     )
                 }
 
-                // ---------- NEW: confirmation dialog on scan ----------
+                // Dialog info légère
+                if (infoMsg != null) {
+                    AlertDialog(
+                        onDismissRequest = { infoMsg = null },
+                        confirmButton = { TextButton(onClick = { infoMsg = null }) { Text("OK") } },
+                        title = { Text("Information") },
+                        text = { Text(infoMsg!!) }
+                    )
+                }
+
+                // Dialog “Envoyer une demande ?”
                 if (pendingInvite != null) {
                     val inv = pendingInvite!!
                     AlertDialog(
@@ -137,17 +158,21 @@ private fun QrScreen(onBack: () -> Unit) {
                         },
                         title = { Text("Demande de chat") },
                         text = {
-                            Text("Vous avez scanné un QR code.\nVoulez-vous envoyer une demande de chat à cette personne ?")
+                            Text(
+                                "Vous avez scanné un QR d’invitation de ${inv.fromUserName}.\n" +
+                                        "Voulez-vous envoyer une demande de chat ?"
+                            )
                         },
                         confirmButton = {
                             TextButton(onClick = {
-                                // Post a join request to “server” (simulated)
-                                InMemoryMailbox.postJoinRequest(
-                                    JoinRequest(
-                                        inviteId = inv.inviteId,
-                                        bIdPub = DemoCrypto.genPublicKey(),
-                                        deviceInfo = android.os.Build.MODEL ?: "device"
-                                    )
+                                scope.launch {
+                                    // MVP : on crée localement le fil et on ouvre la conversation
+                                    repo.ensureThread(inv.threadId, inv.fromUserName)
+                                }
+                                ctx.startActivity(
+                                    Intent(ctx, ChatActivity::class.java)
+                                        .putExtra(ChatActivity.EXTRA_THREAD_ID, inv.threadId)
+                                        .putExtra("extra_title", inv.fromUserName)
                                 )
                                 pendingInvite = null
                                 paused = false
@@ -166,69 +191,14 @@ private fun QrScreen(onBack: () -> Unit) {
     }
 }
 
-
-/* Génération + “inbox” des demandes reçues par A */
+/* =========================================================
+ * SCANNEUR
+ * ========================================================= */
+@androidx.annotation.OptIn(ExperimentalGetImage::class)
 @Composable
-private fun QrGeneratorAndInbox(
-    content: String,
-    pending: List<com.example.harpochat.link.JoinRequest>,
-    onAccept: () -> Unit,
-    onReject: () -> Unit
-) {
-    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        // ===== Générateur (comme tu avais) =====
-        val bitmap = remember(content) {
-            try {
-                val enc = com.journeyapps.barcodescanner.BarcodeEncoder()
-                enc.encodeBitmap(content, com.google.zxing.BarcodeFormat.QR_CODE, 720, 720)
-            } catch (_: Exception) { null }
-        }
-        if (bitmap != null) {
-            androidx.compose.foundation.Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Invite QR",
-                modifier = Modifier.size(240.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            Text("Montre ce QR à l'autre personne", color = AppColors.Muted)
-        } else {
-            Text("Impossible de générer le QR", color = AppColors.Muted)
-        }
-
-        Spacer(Modifier.height(24.dp))
-        // ===== Inbox de demandes (JoinRequest) reçues pour CETTE invite =====
-        if (pending.isEmpty()) {
-            Text("Aucune demande pour le moment…", color = AppColors.OnBgPrimary)
-        } else {
-            Text("Demande reçue :", color = AppColors.OnBgPrimary)
-            Spacer(Modifier.height(8.dp))
-            pending.forEach { req ->
-                Surface(tonalElevation = 2.dp, color = AppColors.Sheet, shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                        Text("Appareil: ${req.deviceInfo}", color = AppColors.OnBgPrimary)
-                        Text("Clé B: ${req.bIdPub.take(20)}…", color = AppColors.Muted)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = onReject) { Text("Refuser") }
-                            Spacer(Modifier.width(8.dp))
-                            Button(onClick = onAccept) { Text("Accepter") }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-
-/* ---------------- Scanner ---------------- */
-
-@ExperimentalGetImage
-@Composable
-fun QrScannerView(
+private fun QrScannerView(
     modifier: Modifier = Modifier,
-    paused: Boolean = false,
+    paused: Boolean,
     onDecoded: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -239,69 +209,46 @@ fun QrScannerView(
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasPermission = granted }
-
     LaunchedEffect(Unit) { permLauncher.launch(Manifest.permission.CAMERA) }
 
     if (!hasPermission) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Autorise la caméra pour scanner un QR code.", color = AppColors.OnBgPrimary)
+            Text("Autorisez la caméra pour scanner un QR code.", color = AppColors.OnBgPrimary)
         }
         return
     }
 
-    // État “live” pour éviter les lambdas figées
+    // États “live”
     val pausedState by rememberUpdatedState(paused)
     val onDecodedState by rememberUpdatedState(onDecoded)
 
-    // Ressources CameraX mémorisées
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val previewView = remember { PreviewView(context) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val scanner = remember { BarcodeScanning.getClient() }
 
-    // L’analyseur lit `pausedState` à chaque frame : pas besoin de rebinder quand paused change
     val analyzer = remember {
         ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
-            val media = imageProxy.image
-            if (media == null) {
-                imageProxy.close(); return@Analyzer
-            }
-
-            // Si en pause, on ignore juste cette frame
-            if (pausedState) {
-                imageProxy.close(); return@Analyzer
-            }
-
+            val media = imageProxy.image ?: run { imageProxy.close(); return@Analyzer }
+            if (pausedState) { imageProxy.close(); return@Analyzer }
             val image = InputImage.fromMediaImage(media, imageProxy.imageInfo.rotationDegrees)
             scanner.process(image)
                 .addOnSuccessListener { barcodes ->
-                    val txt = barcodes.firstOrNull()?.rawValue
-                    if (!txt.isNullOrBlank() && !pausedState) {
-                        onDecodedState(txt)
-                    }
+                    val txt = barcodes.firstOrNull { it.rawValue != null }?.rawValue
+                    if (!txt.isNullOrBlank() && !pausedState) onDecodedState(txt)
                 }
-                .addOnFailureListener {
-                    // Ignorer silencieusement
-                }
-                .addOnCompleteListener {
-                    imageProxy.close()
-                }
+                .addOnCompleteListener { imageProxy.close() }
         }
     }
 
-    // Bind CameraX une seule fois (ou quand le lifecycle change)
     DisposableEffect(lifecycleOwner) {
         val provider = cameraProviderFuture.get()
-
         val preview = Preview.Builder().build().apply {
             setSurfaceProvider(previewView.surfaceProvider)
         }
-
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build().apply {
-                setAnalyzer(executor, analyzer)
-            }
+            .build().apply { setAnalyzer(executor, analyzer) }
 
         provider.unbindAll()
         provider.bindToLifecycle(
@@ -335,18 +282,62 @@ fun QrScannerView(
     }
 }
 
-/* ---------------- Générateur ---------------- */
-
+/* =========================================================
+ * GÉNÉRATEUR (QR + badge compteur + bouton nouveau fil)
+ * ========================================================= */
 @Composable
-private fun QrGeneratorView(modifier: Modifier = Modifier) {
-    var content by remember { mutableStateOf("harpochat:hello") }
-    val bitmap = remember(content) {
+private fun QrGeneratorView(
+    modifier: Modifier = Modifier,
+    meId: String,
+    meName: String
+) {
+    val periodSec = 60
+
+    // ID du fil (conservé tant qu'on ne force pas un nouveau fil)
+    var threadId by remember { mutableStateOf(UUID.randomUUID().toString()) }
+
+    // Contenu courant du QR + contrôle du cycle
+    // ⬇︎ types spécialisés
+    var qrText by remember { mutableStateOf("") }
+    var cycleStartMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var secLeft by remember { mutableIntStateOf(periodSec) }
+
+    // Fonction de (ré)génération, utilisée à l'initialisation, à l’expiration et quand on force
+    fun regenNow() {
+        val invite = makeInviteNow(
+            fromUserId = meId,
+            fromUserName = meName,
+            threadId = threadId,
+            ttlSec = periodSec.toLong()
+        )
+        qrText = encodeInvite(invite)
+    }
+
+    // Boucle d’anim/timing : une seule source de vérité pilote l’affichage et le changement de QR
+    LaunchedEffect(meId, meName, threadId, cycleStartMs) {
+        regenNow()                      // régénère immédiatement au début du cycle
+        secLeft = periodSec             // timer plein
+        while (true) {
+            val now = System.currentTimeMillis()
+            val elapsed = ((now - cycleStartMs) / 1000).toInt().coerceAtLeast(0)
+            val left = (periodSec - (elapsed % periodSec))
+            if (left != secLeft) secLeft = left
+
+            if (elapsed >= periodSec) { // fin de cycle → nouveau QR + reset timer
+                cycleStartMs = now
+                regenNow()
+                secLeft = periodSec
+            }
+            kotlinx.coroutines.delay(200L) // tick fluide (5 Hz), précis et léger
+        }
+    }
+
+    // Bitmap du QR
+    val bitmap = remember(qrText) {
         try {
             val enc = BarcodeEncoder()
-            enc.encodeBitmap(content, BarcodeFormat.QR_CODE, 720, 720)
-        } catch (_: Exception) {
-            null
-        }
+            enc.encodeBitmap(qrText, BarcodeFormat.QR_CODE, 720, 720)
+        } catch (_: Exception) { null }
     }
 
     Column(
@@ -355,47 +346,71 @@ private fun QrGeneratorView(modifier: Modifier = Modifier) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OutlinedTextField(
-            value = content,
-            onValueChange = { content = it },
-            label = { Text("Contenu du QR") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(16.dp))
+        // Badge au-dessus, aligné à droite, pas superposé au QR
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            MinuteCountdownBadge(
+                secLeft = secLeft,
+                periodSec = periodSec,
+                modifier = Modifier.size(56.dp)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+
         if (bitmap != null) {
-            Image(bitmap = bitmap.asImageBitmap(), contentDescription = "QR", modifier = Modifier.size(240.dp))
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Invite QR",
+                modifier = Modifier.size(240.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("Montre ce QR à l’autre personne", color = AppColors.Muted)
         } else {
             Text("Impossible de générer le QR", color = AppColors.Muted)
         }
+
+        Spacer(Modifier.height(24.dp))
+
+        // Force un NOUVEAU fil → nouveau QR + timer resynchronisé
+        Button(
+            onClick = {
+                threadId = UUID.randomUUID().toString()
+                cycleStartMs = System.currentTimeMillis() // reset timer au clic
+                regenNow()                                // régénère immédiatement
+                secLeft = periodSec
+            }
+        ) { Text("Nouveau code / nouveau fil") }
     }
 }
 
-@androidx.camera.core.ExperimentalGetImage
-private class QrAnalyzer(
-    private val onQr: (String) -> Unit
-) : ImageAnalysis.Analyzer {
 
-    private val scanner = BarcodeScanning.getClient()
+/* =========================================================
+ * Badge circulaire (compte à rebours d’une minute)
+ * ========================================================= */
+@Composable
+private fun MinuteCountdownBadge(
+    secLeft: Int,
+    periodSec: Int,
+    modifier: Modifier = Modifier
+) {
+    // Progression **horaire** : on affiche la part ÉCOULÉE, pas la part restante
+    val progress = 1f - (secLeft / periodSec.toFloat())
 
-    override fun analyze(imageProxy: ImageProxy) {
-        val mediaImage = imageProxy.image ?: run {
-            imageProxy.close()
-            return
-        }
-
-        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-
-        scanner.process(image)
-            .addOnSuccessListener { barcodes ->
-                // Récupère le premier QR trouvé (ou adapte si tu veux plusieurs)
-                val first = barcodes.firstOrNull { it.valueType == Barcode.TYPE_TEXT || it.rawValue != null }
-                first?.rawValue?.let(onQr)
-            }
-            .addOnFailureListener {
-                // rien de spécial, on ignore simplement
-            }
-            .addOnCompleteListener {
-                imageProxy.close()
-            }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            progress = { progress },                 // 0 → 1 (sens horaire)
+            strokeWidth = 6.dp,
+            trackColor = AppColors.Muted.copy(alpha = 0.35f),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.matchParentSize()
+        )
+        Text(
+            text = secLeft.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = AppColors.OnBgPrimary
+        )
     }
 }
