@@ -163,7 +163,7 @@ class ConversationsActivity : ComponentActivity() {
                                 tint = Color.White
                             ) {
                                 showSheet = false
-                                startActivity(Intent(this@ConversationsActivity, CodePairActivity::class.java))
+                                startActivity(Intent(context, CodepairActivity::class.java))
                             }
 
                             HorizontalDivider(color = ConvColors.divider)
