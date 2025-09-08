@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,6 +153,17 @@ class ConversationsActivity : ComponentActivity() {
                             ) {
                                 showSheet = false
                                 qrLauncher.launch(Intent(context, QrActivity::class.java))
+                            }
+
+                            HorizontalDivider(color = ConvColors.divider)
+
+                            SheetActionRow(
+                                icon = Icons.Filled.Key,
+                                text = "Importer via un code",
+                                tint = Color.White
+                            ) {
+                                showSheet = false
+                                startActivity(Intent(this@ConversationsActivity, CodePairActivity::class.java))
                             }
 
                             HorizontalDivider(color = ConvColors.divider)
