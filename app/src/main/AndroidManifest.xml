@@ -37,6 +37,10 @@
         <activity
             android:name="com.example.harpochat.messaging.QrActivity"
             android:exported="false"/>
+
+        <activity android:name=".messaging.CodePairActivity"
+            android:exported="false" />
+
     </application>
 </manifest>
 
