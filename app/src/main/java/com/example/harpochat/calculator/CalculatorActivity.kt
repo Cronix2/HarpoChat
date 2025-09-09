@@ -26,8 +26,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -80,6 +83,7 @@ class CalculatorActivity : ComponentActivity() {
                             }
                         }
                     )
+
                 }
             }
         }
@@ -97,6 +101,18 @@ private enum class PinResult { SECRET, DURESS, NO_MATCH }
 /* ==============================
  *     Écran Calculatrice
  * ============================== */
+
+@Composable
+private fun exprFontFor(len: Int, landscape: Boolean): Float {
+    return when {
+        len <= 14 -> if (landscape) 52f else 56f
+        len <= 22 -> if (landscape) 44f else 48f
+        len <= 32 -> if (landscape) 36f else 40f
+        len <= 48 -> if (landscape) 30f else 32f
+        else      -> if (landscape) 26f else 28f
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CalculatorScreen(
@@ -137,7 +153,8 @@ private fun CalculatorScreen(
         Spacer(Modifier.weight(weightHaut))
 
         val exprFontSize = if (isLandscape) 52.sp else 56.sp
-        val resultFontSize = if (isLandscape) 48.sp else 52.sp
+        val resultFontSize = if (isLandscape) 36.sp else 40.sp
+
 
         // ====== Display ======
         Box(
@@ -170,6 +187,8 @@ private fun CalculatorScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.headlineLarge.copy(fontSize = exprFontSize),
                         maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
                         textAlign = TextAlign.End,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -362,7 +381,7 @@ private fun CalculatorScreen(
                     DigitKey("1") { viewModel.addDigit('1') }
                     DigitKey("2") { viewModel.addDigit('2') }
                     DigitKey("3") { viewModel.addDigit('3') }
-                    EqualKey(
+                    /*EqualKey(
                         onTap = {
                             viewModel.evaluate()
                             justDidEquals = true
@@ -374,7 +393,7 @@ private fun CalculatorScreen(
                                 PinResult.NO_MATCH -> {}
                             }
                         }
-                    )
+                    )*/
                 }
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -529,13 +548,18 @@ private fun KeyBase(
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onClick: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
         color = container,
         tonalElevation = 2.dp,
         shadowElevation = 2.dp,
-        onClick = onClick
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        }
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(label, style = MaterialTheme.typography.titleLarge, color = contentColor)

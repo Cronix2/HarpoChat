@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -369,14 +370,30 @@ private fun factorialOf(x: Double): Double {
     return acc
 }
 
+private fun isSingleOperand(tokens: List<Tok>): Boolean {
+    // exactement 1 token nombre/constante, pas d’op ni de fonction
+    return tokens.count { it is Num || it is ConstPi || it is ConstE } == tokens.size
+}
+
+private fun balanceRightParens(s: String): String {
+    var bal = 0
+    for (c in s) {
+        if (c == '(') bal++
+        else if (c == ')') bal--
+    }
+    return if (bal > 0) s + ")".repeat(bal) else s
+}
+
+
 private fun tryEvaluate(s: String, radians: Boolean): String {
     return try {
-        if (!isCompleteExpression(s)) "" else {
-            val v = evalRpn(toRpn(tokenize(s)), radians)
-            val bd = BigDecimal(v).stripTrailingZeros()
+        val balanced = balanceRightParens(s)
+        if (isSingleOperand(tokenize(balanced))) return ""
+        if (!isCompleteExpression(balanced)) "" else {
+            val v = evalRpn(toRpn(tokenize(balanced)), radians)
+            val bd = BigDecimal(v).setScale(10, RoundingMode.HALF_UP).stripTrailingZeros()
             val abs = bd.abs()
-            val useSci = (abs > BigDecimal("1000000000")) ||
-                    (abs != BigDecimal.ZERO && abs < BigDecimal("0.000001"))
+            val useSci = (abs > BigDecimal("1E9")) || (abs != BigDecimal.ZERO && abs < BigDecimal("1E-6"))
             if (useSci) {
                 val symbols = DecimalFormatSymbols.getInstance(Locale.FRANCE)
                 val fmt = DecimalFormat("0.######E0", symbols)
