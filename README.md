@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-    <em><code>❯ Discreet end‑to‑end encrypted chat disguised as a calculator</code></em>
+    <em><code>❯ Discreet end‑to‑end encrypted chat disguised as a full‑featured scientific calculator</code></em>
 </p>
 
 <p align="center">
@@ -26,6 +26,8 @@
     <img src="https://img.shields.io/badge/Jetpack&nbsp;Compose-4285F4.svg?style=flat&logo=Jetpack-Compose&logoColor=white" alt="Jetpack Compose">
     <img src="https://img.shields.io/badge/Gradle-02303A.svg?style=flat&logo=Gradle&logoColor=white" alt="Gradle">
     <img src="https://img.shields.io/badge/Coroutines-00599C.svg?style=flat&logo=kotlin&logoColor=white" alt="Coroutines">
+    <img src="https://img.shields.io/badge/Room-007ACC.svg?style=flat&logo=sqlite&logoColor=white" alt="Room">
+    <img src="https://img.shields.io/badge/SQLCipher-5B4E51.svg?style=flat&logo=sqlite&logoColor=white" alt="SQLCipher">
     <img src="https://img.shields.io/badge/Signal&nbsp;Protocol-000000.svg?style=flat&logo=signal&logoColor=white" alt="Signal Protocol">
 </p>
 
@@ -51,63 +53,71 @@
 
 ## 📍 Overview
 
-**HarpoChat** is a demonstration Android application that combines a modern **encrypted messenger** with a **fully‑featured calculator facade**.  The app launches as a convincing calculator; only by entering a pre‑configured secret PIN does the secure chat reveal itself.  A secondary *duress* PIN instantly wipes the secure store.  Behind the façade lies a Compose‑based chat UI backed by the open‑source **Signal Protocol** for true end‑to‑end encryption.  The project illustrates how to meld encryption, reactive data flows and Jetpack Compose into a seamless, security‑focused experience.  It is intended for educational purposes and is not yet production ready.
+**HarpoChat** is an Android application that hides a modern, end‑to‑end encrypted messenger behind the guise of a **full‑featured scientific calculator**.  The app opens as a convincing calculator with basic and advanced operations; only by entering a secret PIN does the messaging interface reveal itself.  A secondary *duress* PIN instantly wipes the encrypted database and preferences.  Once unlocked, users are presented with a conversation list and can chat using a Compose‑based UI backed by persistent storage.
+
+The chat layer uses a **Room** database wrapped with **SQLCipher** so that all stored messages and threads are encrypted.  A passphrase for the database is generated once and stored in Android’s `EncryptedSharedPreferences` via the `DbCrypto` helper.  Conversations are exposed as **Flows** so that the UI reacts automatically to new messages.  A lightweight network simulator in the repository acknowledges outgoing messages, updates their status and echoes a reply, paving the way for future real networking.
 
 ---
 
 ## 🧙 Name Origin
 
-The name **HarpoChat** pays homage to **Harpocrates**, the Hellenistic god of silence and secrets.  In Greek mythology, Harpocrates was adapted from the Egyptian child‑god **Horus**.  Greeks and Romans saw statues of the boy Horus with his finger to his mouth and misinterpreted the pose as a command for secrecy.  As a result, Harpocrates became known as the deity of silence, secrets and confidentiality.  Naming the project after Harpocrates underscores its goal: keeping conversations hidden and private.
+The name **HarpoChat** pays homage to **Harpocrates**, the Greco‑Roman god of silence and secrets.  Greeks and Romans interpreted statues of the Egyptian child‑god **Horus** holding a finger to his lips as a gesture of secrecy.  This misunderstanding transformed Harpocrates into a deity representing confidentiality and discreet communication.  Naming the project after Harpocrates underscores its focus on keeping conversations hidden and private.
 
 ---
 
 ## 👾 Features
 
-- 🔐 **Discreet Calculator Interface** – the application launches into a complete calculator.  It includes basic operations, memory functions (MC, M+, M-, MR), a two‑line display with expression preview and animated transitions.  A secret PIN unlocks the chat, while a duress PIN clears the secure preferences and displays a “Memory cleared” toast.
-- 📱 **Orientation‑Aware UI** – the calculator adapts its layout for portrait and landscape orientations and uses Compose’s `AnimatedContent` for smooth expression/result updates.
-- 🗨️ **Conversation List** – after unlocking, users see a list of conversation previews with names, last messages, timestamps and unread counts.  A top app bar provides access to settings, and a floating action button hints at creating new conversations.
-- 💬 **Secure Messaging** – conversations use a Compose chat screen and a `ChatRepository` that encrypts messages with the **Signal Protocol**.  Messages are encrypted on send, decrypted on receipt and displayed with the ciphertext length.
-- 💾 **Secure Key Storage** – secret values such as the calculator PINs and Signal keys are stored in Android’s `EncryptedSharedPreferences` using a generated `MasterKey`.
-- 🔄 **Reactive State** – the app relies on Kotlin Coroutines and `StateFlow` to expose message and conversation updates, automatically updating the UI.
-- 🛠️ **Modular Architecture** – the codebase is organised into packages such as `calculator`, `messaging`, `crypto`, `data`, `security` and `ui`, promoting separation of concerns.
+- 🔐 **Secret & Duress PINs** – Enter a **secret PIN** on the calculator to reveal the messaging UI.  Enter the **duress PIN** to erase the encrypted database and clear all preferences.
+- 🧮 **Complete Scientific Calculator** – Supports basic arithmetic, memory functions (MC, M+, M–, MR) and advanced operations such as powers, roots, factorial, inverse, reciprocals, trigonometric functions with radian/degree and inverse modes, constants like π and e, percentage and more.  The layout adapts between portrait and landscape, with landscape exposing the scientific keys.
+- 📱 **Conversation List** – A dedicated screen lists existing conversations with avatar placeholders, last messages, timestamps and unread counts.  Tapping a row opens the corresponding chat.
+- 💬 **Persistent Messaging** – Messages and threads are stored in a local Room database and encrypted using SQLCipher.  The `ChatRepository` exposes a `messages(threadId)` flow that maps database entities to UI models.  Sending a message inserts it as `SENDING`, then simulates acknowledgement and an incoming reply.  Message statuses (Sending, Sent, Delivered, Read) are tracked in the database.
+- 🔑 **Secure Storage** – A random 32‑byte passphrase for SQLCipher is generated and stored encrypted using `EncryptedSharedPreferences` so only the app can decrypt the database.  The duress PIN removes this passphrase, rendering the database unreadable.
+- 🔄 **Reactive UI** – Kotlin Coroutines and `StateFlow` are used to emit message lists, while Jetpack Compose collects these flows and updates the UI automatically.
+- 🛠️ **Modular Architecture** – The project is organised into clear packages: `calculator` for the UI façade, `messaging` for conversation lists, `ui` for chat screens, `data` for Room/SQLCipher logic, `crypto` for end‑to‑end encryption utilities, and `security` for key storage.  This separation makes it easy to extend or replace components.
+- 📡 **Future‑Ready Encryption** – Although the current version uses only local encryption, a pluggable `CryptoEngine` interface and a `SignalCryptoEngine` implementation remain in the codebase, laying the groundwork for true end‑to‑end encryption with the Signal Protocol in future revisions.
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 HarpoChat/
 ├── LICENSE
 ├── README.md
 ├── build.gradle.kts
 ├── gradle.properties
-├── gradle/            # Wrapper and version catalog
+├── gradle/                    # Wrapper and version catalog
 ├── gradlew / gradlew.bat
 └── app/
     ├── build.gradle.kts       # Module‑level Gradle script
     ├── proguard-rules.pro
     └── src/
         ├── main/
-        │   ├── AndroidManifest.xml       # Defines launcher as CalculatorActivity
+        │   ├── AndroidManifest.xml       # Declares activities
         │   ├── java/com/example/harpochat/
-        │   │   ├── MainActivity.kt           # Chat screen using Compose
         │   │   ├── calculator/
-        │   │   │   └── CalculatorActivity.kt  # Disguised calculator with PIN logic
+        │   │   │   └── CalculatorActivity.kt  # Scientific calculator with PIN logic
         │   │   ├── messaging/
         │   │   │   └── ConversationsActivity.kt  # Conversation list UI
-        │   │   ├── crypto/
-        │   │   │   ├── CryptoEngine.kt        # Interface & fake engine
-        │   │   │   ├── SignalCryptoEngine.kt  # Signal Protocol implementation
-        │   │   │   └── SignalStores.kt        # Key generation & stores
         │   │   ├── data/
-        │   │   │   └── ChatRepository.kt      # Handles E2EE and message flow
-        │   │   ├── security/
-        │   │   │   └── SecureStore.kt         # EncryptedSharedPreferences wrapper
-        │   │   └── ui/
-        │   │       ├── ChatScreen.kt          # Compose chat UI
-        │   │       ├── ChatViewModel.kt       # Exposes messages via StateFlow
-        │   │       └── theme/                 # Material theme definitions
-        │   └── res/                           # Application resources
+        │   │   │   ├── AppDatabase.kt         # Room DB with SQLCipher
+        │   │   │   ├── DbCrypto.kt            # Generates encrypted DB passphrase & duress wipe
+        │   │   │   ├── Dao.kt                 # DAO interfaces for threads and messages
+        │   │   │   ├── Entities.kt            # ThreadEntity and MessageEntity definitions
+        │   │   │   ├── Model.kt               # ChatMessage model and enums
+        │   │   │   └── ChatRepository.kt      # Handles storage, message status and network simulation
+        │   │   ├── ui/
+        │   │   │   ├── ChatScreen.kt          # Compose UI for chat bubbles and input
+        │   │   │   ├── ChatViewModel.kt       # ViewModel exposing message flow and send/openThread
+        │   │   ├── ChatActivity.kt            # Activity to host ChatScreen for a given thread
+        │   │   ├── MainActivity.kt            # Entry point (currently opens a default chat)
+        │   │   ├── crypto/                    # Signal Protocol integration (future use)
+        │   │   │   ├── CryptoEngine.kt        # Interface and fake engine
+        │   │   │   ├── SignalCryptoEngine.kt  # Signal-based implementation
+        │   │   │   └── SignalStores.kt        # Key generation & stores
+        │   │   └── security/
+        │   │       └── SecureStore.kt         # Wrapper around EncryptedSharedPreferences
+        │   └── res/                           # Resources (themes, icons, layouts)
         ├── test/                              # Unit tests (empty)
         └── androidTest/                       # Instrumentation tests (empty)
 ```
@@ -121,68 +131,59 @@ HarpoChat/
 To build and run **HarpoChat** you will need:
 
 - **JDK 17** – the project targets Java 17.
-- **Android Studio Hedgehog** or later, or the command‑line Gradle wrapper.
-- **Android SDK** – `compileSdk` is set to 36 and `minSdk` to 26.
-- An emulator or device running **Android 8.0** (API 26) or higher.
+- **Android Studio Hedgehog** or later, or the command‑line **Gradle** wrapper.
+- **Android SDK** – `compileSdk` is 36 and `minSdk` is 26.
+- A device or emulator running **Android 8.0 (API 26)** or higher.
 
 ### ⚙️ Installation
 
-Clone the repository:
+Clone the repository and build the app:
 
 ```sh
 git clone https://github.com/Cronix2/HarpoChat.git
 cd HarpoChat
-```
-
-Open the project in Android Studio and let it download dependencies, or build from the command line:
-
-```sh
 ./gradlew assembleDebug
 ```
 
-The APK will be produced in `app/build/outputs/apk/debug/`.
+The debug APK will be generated in `app/build/outputs/apk/debug/`.
 
 ### 🤖 Usage
 
-Run the app on an emulator or physical device.  You will see a dark‑themed calculator with a two‑line display, memory buttons and basic operators.  To access the hidden chat:
+1. **Launch the app.**  It opens on a dark‑themed scientific calculator.  Use it as you would any calculator – with memory keys and scientific functions available in landscape.
+2. **Unlock the chat.**  Enter your **secret PIN** (default `527418`) and press the equals key (`=`).  This will navigate to the conversation list.  Enter the **duress PIN** (default `1234`) to wipe the encrypted database and preferences.
+3. **Select a conversation.**  Tap a chat preview to open it.  A top bar shows the contact’s name and an avatar.  Your messages appear in blue bubbles on the right; incoming messages appear in grey bubbles on the left.
+4. **Send messages.**  Type your message into the text field and press **Envoyer**.  Messages are inserted into the database as `SENDING`, then marked `SENT` after 250 ms and echoed back as a reply after another 600 ms.  Status icons update accordingly.
+5. **Return to calculator.**  Press the back button in the chat header to return to the conversation list or calculator façade.
 
-1. **Enter your secret PIN** using the calculator keys.  On the first launch default values are `527418` for the secret pin and `1234` for the duress pin.  The secret pin triggers the `onUnlock` callback which navigates to the conversation list.
-2. **Enter the duress PIN** to immediately clear the secure preferences (erasing your stored keys and messages) and show a “Memory cleared” toast.
-3. Once unlocked, select a conversation or create a new one (TODO).  Messages you send are encrypted using the Signal engine, decrypted in a loopback for demonstration and displayed alongside the byte length of the ciphertext.
-4. Press the back button to return to the calculator façade.
-
-No real network communication is implemented yet; both peers are simulated within the app.  Likewise, conversation creation and settings screens are placeholders to be expanded.
+*Note:* Real network communication and contact management are not yet implemented.  Conversations are local and simulated.
 
 ---
 
 ## 🧪 Future Testing
 
-Automated tests are not currently implemented.  Potential future tests could include:
+There are currently **no automated tests**.  Potential tests include:
 
-- Unit tests for arithmetic logic, PIN validation and encryption/decryption routines.
-- Instrumentation tests to verify navigation between calculator, conversation list and chat screens.
-- UI tests using Espresso or Compose Test Kit for verifying the calculator layout and chat interactions.
+- Unit tests for calculator operations, PIN validation and database encryption logic.
+- Unit and instrumentation tests for `ChatRepository` to verify message status transitions and persistence.
+- UI tests using Espresso or Compose Test Kit for conversation navigation and chat interactions.
 
 ---
 
 ## 📌 Project Roadmap
 
-The project is actively evolving.  Planned or potential enhancements include:
-
-- **Real networking** – implement a back‑end or peer‑to‑peer transport so that messages are exchanged between devices instead of looped back locally.
-- **User management** – support user accounts, contact lists and key exchanges.
-- **Persistent chat history** – store conversations securely (e.g. with Room) instead of keeping messages in memory.
-- **Configurable PINs & themes** – settings screen to change the secret/duress codes and personalise appearance.
-- **Conversation creation & group chats** – allow users to start new conversations, add participants and share media.
-- **Enhanced calculator** – extend operations (percentage, square root), improve animations and adapt for tablets.
-
-Contributions and feature requests are welcome!
+- **True End‑to‑End Encryption:** Integrate the existing `SignalCryptoEngine` with the new database layer so that plaintext messages are never stored; encrypt/decrypt messages on send/receive.
+- **Real Networking:** Replace the network simulator with actual peer‑to‑peer or server‑mediated message exchange.
+- **Conversation Creation & Management:** Add UI and logic to create new threads, manage contacts and group chats.
+- **Secure PIN Configuration:** Provide a settings screen to change the secret and duress PINs and to configure biometric unlock.
+- **Rich Media & Attachments:** Support sending images, files and voice messages.
+- **Improved Calculator:** Add parentheses support and additional scientific functions and refine animations.
+- **Persistent App Settings:** Persist dark/light mode preferences and custom themes.
 
 ---
 
 ## 🔰 Contributing
 
-Contributions are very welcome!  To contribute:
+Contributions are welcome!  To contribute:
 
 1. **Fork** the repository on GitHub.
 2. **Clone** your fork:
@@ -191,28 +192,24 @@ Contributions are very welcome!  To contribute:
    git clone https://github.com/<your-username>/HarpoChat.git
    cd HarpoChat
    ```
-
-3. **Create a new branch** for your changes:
+3. **Create a new branch** for your feature or fix:
 
    ```sh
    git checkout -b your-feature-name
    ```
-
 4. **Make your changes** and commit them with clear messages:
 
    ```sh
    git commit -m "Add awesome feature"
    ```
-
 5. **Push** the branch to your fork:
 
    ```sh
    git push origin your-feature-name
    ```
-
 6. **Open a Pull Request** describing your changes and why they should be merged.
 
-Please follow the existing code style and include tests where relevant.  For major changes, open an issue first to discuss the proposal.
+Please follow the existing code style and include tests where relevant.  For major changes, open an issue first to discuss your proposal.
 
 ---
 
@@ -222,4 +219,4 @@ This project is licensed under the **MIT License**.  See the [LICENSE](./LICENSE
 
 ---
 
-🚀 **Thank you for exploring HarpoChat!**  If this project inspires you to build privacy‑focused communication tools or you learn something useful, consider starring the repository and sharing your feedback.
+🚀 **Thank you for exploring HarpoChat!**  If this project sparks ideas for privacy‑focused communication or hidden apps, please consider starring the repository and sharing your feedback.

@@ -16,37 +16,35 @@
 ————————————————————————————————————
 */
 
-package com.example.harpochat.ui.theme
+package com.example.harpochat.messaging
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.harpochat.data.ChatRepository
+import com.example.harpochat.data.ThreadEntity
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
-)
+class ConversationsViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val repo = ChatRepository.create(app)
+
+    /** Flux de toutes les conversations (threads) pour l’écran de liste. */
+    val threads: StateFlow<List<ThreadEntity>> =
+        repo.threads()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyList()
+            )
+
+    /** Crée (ou met à jour) une conversation. */
+    fun createThread(id: String, title: String) {
+        viewModelScope.launch {
+            repo.ensureThread(id, title)
+        }
+    }
+}

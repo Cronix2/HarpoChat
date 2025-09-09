@@ -16,37 +16,21 @@
 ————————————————————————————————————
 */
 
-package com.example.harpochat.ui.theme
+package com.example.harpochat.data
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import java.util.UUID
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+/** Qui a envoyé le message. */
+enum class Sender { Me, Other }
+
+/** Statut d’envoi/lecture d’un message. */
+enum class MessageStatus { Sending, Sent, Delivered, Read, Error }
+
+/** Modèle de message. */
+data class ChatMessage(
+    val id: String = UUID.randomUUID().toString(),
+    val text: String,
+    val sender: Sender,
+    val timestamp: Long = System.currentTimeMillis(),
+    val status: MessageStatus = MessageStatus.Sending
 )

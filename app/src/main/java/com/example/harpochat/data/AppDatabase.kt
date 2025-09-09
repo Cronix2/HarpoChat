@@ -16,37 +16,28 @@
 ————————————————————————————————————
 */
 
-package com.example.harpochat.ui.theme
+package com.example.harpochat.data
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import net.sqlcipher.database.SupportFactory
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+@Database(
+    entities = [ThreadEntity::class, MessageEntity::class],
+    version = 1,
+    exportSchema = false
 )
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun threadDao(): ThreadDao
+    abstract fun messageDao(): MessageDao
+
+    companion object {
+        fun build(ctx: Context, factory: SupportFactory): AppDatabase =
+            Room.databaseBuilder(ctx, AppDatabase::class.java, "harpo_encrypted.db")
+                .openHelperFactory(factory)  // <-- SQLCipher
+                .fallbackToDestructiveMigration()
+                .build()
+    }
+}

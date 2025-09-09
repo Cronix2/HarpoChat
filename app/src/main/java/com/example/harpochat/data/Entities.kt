@@ -16,37 +16,27 @@
 ————————————————————————————————————
 */
 
-package com.example.harpochat.ui.theme
+package com.example.harpochat.data
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+@Entity(tableName = "threads")
+data class ThreadEntity(
+    @PrimaryKey val id: String,
+    val title: String
+)
+
+@Entity(
+    tableName = "messages",
+    indices = [Index("threadId")]
+)
+data class MessageEntity(
+    @PrimaryKey val id: String,
+    val threadId: String,
+    val sender: String,   // "me" or contact id
+    val body: String,     // plaintext here (DB itself is encrypted)
+    val time: Long,
+    val status: Int       // 0=SENDING,1=SENT,2=DELIVERED,3=READ
 )
