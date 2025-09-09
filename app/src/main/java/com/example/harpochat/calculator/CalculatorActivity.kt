@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -32,17 +33,16 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
-import java.math.BigDecimal
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
-import java.util.Locale
 import kotlinx.coroutines.delay
-import kotlin.math.*
 
 /* =========================
  *  Activité Calculatrice
  * ========================= */
 class CalculatorActivity : ComponentActivity() {
+
+    // Récupération du ViewModel (fourni par hilt, factory, ou par défaut)
+    private val calcViewModel: CalculatorViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
@@ -58,9 +58,16 @@ class CalculatorActivity : ComponentActivity() {
             DarkCalcTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     CalculatorScreen(
-                        onUnlock = { startActivity(Intent(this, ConversationsActivity::class.java)) },
+                        viewModel = calcViewModel,
+                        onUnlock = {
+                            // Par sécurité, on nettoie l’écran après unlock
+                            calcViewModel.clearAll()
+                            startActivity(Intent(this, ConversationsActivity::class.java))
+                        },
                         onDuress = {
+                            // Purge stockage + clear écran
                             prefs.edit { clear() }
+                            calcViewModel.clearAll()
                             Toast.makeText(this, "Memory cleared", Toast.LENGTH_SHORT).show()
                         },
                         validatePins = { entered ->
@@ -93,66 +100,26 @@ private enum class PinResult { SECRET, DURESS, NO_MATCH }
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CalculatorScreen(
+    viewModel: CalculatorViewModel,
     onUnlock: () -> Unit,
     onDuress: () -> Unit,
     validatePins: (String) -> PinResult
 ) {
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // États exposés par le ViewModel
+    val expressionText by viewModel.expression.collectAsState()
+    val previewText by viewModel.preview.collectAsState()
+    val invMode by viewModel.invMode.collectAsState()
+    val radMode by viewModel.radMode.collectAsState()
+
+    // Animation “just did equals”
     var justDidEquals by remember { mutableStateOf(false) }
 
-    // ====== Moteur "expression" ======
-    var expr by remember { mutableStateOf("") }            // ligne du haut
-    var angleInRadians by remember { mutableStateOf(false) } // toggle Rad
-    fun setExpr(s: String) { expr = s }
-    fun digitsOnly(): String = expr.filter { it.isDigit() } // pour PIN long-press "="
+    // Pour la vérification PIN, on reprend uniquement les chiffres de l’expression
+    fun digitsOnlyFromExpression(): String = expressionText.filter { it.isDigit() }
 
-    // Helpers d’édition
-    fun insertRaw(s: String) { expr += s }
-    fun digit(d: String) {
-        if (expr == "0") expr = d else expr += d
-    }
-    fun dot() {
-        // On autorise "." si le segment numérique courant n’en a pas déjà
-        val lastNum = Regex("""\d+(?:[.,]\d+)?$""").find(expr)?.value ?: ""
-
-        if (!lastNum.contains('.') && !lastNum.contains(',')) {
-            expr += "."
-        }
-    }
-
-    fun binOp(op: String) {
-        if (expr.isBlank()) return
-        val t = expr.trimEnd()
-
-        // Est-ce que l'expression se termine déjà par un opérateur ?
-        val endsWithOp = t.isNotEmpty() && t.last() in charArrayOf(
-            '+', '-', '×', '÷', '*', '/', '^'
-        )
-
-        expr = if (endsWithOp) {
-            // remplace l'opérateur de fin
-            t.dropLast(1) + " $op "
-        } else {
-            // ajoute l'opérateur
-            "$t $op "
-        }
-    }
-
-    fun funcPrefix(name: String) { expr += "$name(" }
-    fun openParen() { expr += "(" }
-    fun closeParen() { expr += ")" }
-    fun clearAll() { expr = "" }
-    fun backspace() { if (expr.isNotEmpty()) expr = expr.dropLast(1) }
-
-    fun equalsNormal() {
-        val r = tryEvaluate(expr, angleInRadians)
-        if (r.isNotEmpty()) {
-            setExpr(r)         // le résultat devient l’expression courante
-            justDidEquals = true
-        }
-    }
-
-    // ====== UI ======
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -160,7 +127,7 @@ private fun CalculatorScreen(
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        // 5% haut, 25% display, 65% clavier, 3% bas, 2% espace
+        // Layout weights : ~5% top spacer, 25% display, 65% keyboard, ~5% bottom spacer
         val weightDisplay = 0.25f
         val weightClavier = 0.65f
         val weightBas = 0.05f
@@ -169,7 +136,7 @@ private fun CalculatorScreen(
 
         Spacer(Modifier.weight(weightHaut))
 
-        val exprFontSize  = if (isLandscape) 52.sp else 56.sp
+        val exprFontSize = if (isLandscape) 52.sp else 56.sp
         val resultFontSize = if (isLandscape) 48.sp else 52.sp
 
         // ====== Display ======
@@ -187,7 +154,7 @@ private fun CalculatorScreen(
                 horizontalAlignment = Alignment.End
             ) {
                 AnimatedContent(
-                    targetState = expr.ifBlank { "0" },
+                    targetState = expressionText.ifBlank { "0" },
                     transitionSpec = {
                         if (justDidEquals) {
                             slideInVertically(tween(180)) { +it } togetherWith
@@ -199,7 +166,7 @@ private fun CalculatorScreen(
                     label = "expr-anim"
                 ) { text ->
                     Text(
-                        text = text.replace('.', ','),
+                        text = text,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.headlineLarge.copy(fontSize = exprFontSize),
                         maxLines = 1,
@@ -210,9 +177,8 @@ private fun CalculatorScreen(
 
                 Spacer(Modifier.height(6.dp))
 
-                val preview = tryEvaluate(expr, angleInRadians)
                 AnimatedContent(
-                    targetState = preview,
+                    targetState = previewText,
                     transitionSpec = {
                         if (justDidEquals) {
                             slideInVertically(tween(160)) { +it } togetherWith
@@ -249,6 +215,7 @@ private fun CalculatorScreen(
             verticalArrangement = Arrangement.spacedBy(KeyPadding)
         ) {
             if (!isLandscape) {
+                // Portrait : simple + "=" vertical
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
@@ -259,22 +226,28 @@ private fun CalculatorScreen(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    FuncKey("C") { clearAll() }
-                    OpKey("÷") { binOp("÷") }
-                    OpKey("×") { binOp("×") }
-                    FuncKey("⌫") { backspace() }
+                    FuncKey("C") { viewModel.clearAll() }
+                    OpKey("÷") { viewModel.addBinaryOp("÷") }
+                    OpKey("×") { viewModel.addBinaryOp("×") }
+                    FuncKey("⌫") { viewModel.backspace() }
                 }
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    DigitKey("7") { digit("7") }; DigitKey("8") { digit("8") }; DigitKey("9") { digit("9") }; OpKey("−") { binOp("-") }
+                    DigitKey("7") { viewModel.addDigit('7') }
+                    DigitKey("8") { viewModel.addDigit('8') }
+                    DigitKey("9") { viewModel.addDigit('9') }
+                    OpKey("−") { viewModel.addBinaryOp("−") }
                 }
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    DigitKey("4") { digit("4") }; DigitKey("5") { digit("5") }; DigitKey("6") { digit("6") }; OpKey("+") { binOp("+") }
+                    DigitKey("4") { viewModel.addDigit('4') }
+                    DigitKey("5") { viewModel.addDigit('5') }
+                    DigitKey("6") { viewModel.addDigit('6') }
+                    OpKey("+") { viewModel.addBinaryOp("+") }
                 }
                 Row(
                     Modifier.weight(2f).fillMaxWidth(),
@@ -288,23 +261,29 @@ private fun CalculatorScreen(
                             Modifier.weight(1f).fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                         ) {
-                            DigitKey("1") { digit("1") }
-                            DigitKey("2") { digit("2") }
-                            DigitKey("3") { digit("3") }
+                            DigitKey("1") { viewModel.addDigit('1') }
+                            DigitKey("2") { viewModel.addDigit('2') }
+                            DigitKey("3") { viewModel.addDigit('3') }
                         }
                         Row(
                             Modifier.weight(1f).fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                         ) {
-                            BigDigitKey("0") { digit("0") }
-                            DigitKey(".") { dot() }
+                            BigDigitKey("0") { viewModel.addDigit('0') }
+                            DigitKey(".") { viewModel.addDot() }
                         }
                     }
                     EqualKeyTall(
-                        modifier = Modifier.weight(1f).padding(start = 8.dp).fillMaxHeight(),
-                        onTap = { equalsNormal() },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 8.dp)
+                            .fillMaxHeight(),
+                        onTap = {
+                            viewModel.evaluate()
+                            justDidEquals = true
+                        },
                         onLong = {
-                            when (validatePins(digitsOnly().trim())) {
+                            when (validatePins(digitsOnlyFromExpression().trim())) {
                                 PinResult.SECRET -> onUnlock()
                                 PinResult.DURESS -> onDuress()
                                 PinResult.NO_MATCH -> {}
@@ -314,61 +293,118 @@ private fun CalculatorScreen(
                 }
             } else {
                 // ======== Scientifique paysage ========
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("(") { openParen() }
-                    FuncKey(")") { closeParen() }
-                    FuncKey("1/x") { insertRaw("1/(") }           // puis saisir x et ")"
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    FuncKey("(") { viewModel.addLeftParen() }
+                    FuncKey(")") { viewModel.addRightParen() }
+                    FuncKey("±") { viewModel.toggleSignOfLastNumber() }
+                    FuncKey("1/x") { viewModel.reciprocalOfLastTerm() }
                     MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
                 }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("x²") { insertRaw("^2") }             // à poser après un nombre (ex: 5^2)
-                    FuncKey("x³") { insertRaw("^3") }
-                    FuncKey("xʸ") { binOp("^") }
-                    FuncKey("C")  { clearAll() }
-                    OpKey("÷")    { binOp("÷") }
-                    OpKey("×")    { binOp("×") }
-                    FuncKey("⌫")  { backspace() }
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    FuncKey("x²") { viewModel.addBinaryOp("^"); viewModel.addDigit('2') }
+                    FuncKey("x³") { viewModel.addBinaryOp("^"); viewModel.addDigit('3') }
+                    FuncKey("xʸ") { viewModel.addBinaryOp("^") }
+                    FuncKey("C") { viewModel.clearAll() }
+                    OpKey("÷") { viewModel.addBinaryOp("÷") }
+                    OpKey("×") { viewModel.addBinaryOp("×") }
+                    FuncKey("⌫") { viewModel.backspace() }
                 }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("x!") { funcPrefix("fact") }          // fact(
-                    FuncKey("√")  { funcPrefix("sqrt") }          // sqrt(
-                    FuncKey("ʸ√X"){ insertRaw("^(1/(") }         // saisie de y puis ")" puis X
-                    DigitKey("7"){ digit("7") }; DigitKey("8"){ digit("8") }; DigitKey("9"){ digit("9") }; OpKey("−"){ binOp("-") }
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    FuncKey("x!") { viewModel.addFactorial() }   // postfix “!”
+                    FuncKey("√") { viewModel.addFunction("sqrt") }
+                    FuncKey("ʸ√X") {
+                        // y-th root of X == X^(1/y) -> on insère ^ puis (1/ … )
+                        viewModel.addBinaryOp("^")
+                        viewModel.addLeftParen()
+                        viewModel.addDigit('1')
+                        viewModel.addBinaryOp("÷")
+                        // l’utilisateur saisira y, puis on lui laisse fermer “)”
+                    }
+                    DigitKey("7") { viewModel.addDigit('7') }
+                    DigitKey("8") { viewModel.addDigit('8') }
+                    DigitKey("9") { viewModel.addDigit('9') }
+                    OpKey("−") { viewModel.addBinaryOp("−") }
                 }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("e")  { insertRaw("e") }              // constante e
-                    FuncKey("ln") { funcPrefix("ln") }
-                    FuncKey("lg") { funcPrefix("lg") }
-                    DigitKey("4"){ digit("4") }; DigitKey("5"){ digit("5") }; DigitKey("6"){ digit("6") }; OpKey("+"){ binOp("+") }
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    FuncKey("e") { viewModel.addConstant("e") }
+                    FuncKey("ln") { viewModel.addFunction("ln") }
+                    FuncKey("lg") { viewModel.addFunction("log10") }
+                    DigitKey("4") { viewModel.addDigit('4') }
+                    DigitKey("5") { viewModel.addDigit('5') }
+                    DigitKey("6") { viewModel.addDigit('6') }
+                    OpKey("+") { viewModel.addBinaryOp("+") }
                 }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    FuncKey("sin") { funcPrefix("sin") }
-                    FuncKey("cos") { funcPrefix("cos") }
-                    FuncKey("tan") { funcPrefix("tan") }
-                    DigitKey("1"){ digit("1") }; DigitKey("2"){ digit("2") }; DigitKey("3"){ digit("3") }
-                    EqualKey(onTap = { equalsNormal() }, onLong = {
-                        when (validatePins(digitsOnly().trim())) {
-                            PinResult.SECRET -> onUnlock()
-                            PinResult.DURESS -> onDuress()
-                            PinResult.NO_MATCH -> {}
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    FuncKey(if (invMode) "sin⁻¹" else "sin") {
+                        viewModel.addFunction(if (invMode) "asin" else "sin")
+                    }
+                    FuncKey(if (invMode) "cos⁻¹" else "cos") {
+                        viewModel.addFunction(if (invMode) "acos" else "cos")
+                    }
+                    FuncKey(if (invMode) "tan⁻¹" else "tan") {
+                        viewModel.addFunction(if (invMode) "atan" else "tan")
+                    }
+                    DigitKey("1") { viewModel.addDigit('1') }
+                    DigitKey("2") { viewModel.addDigit('2') }
+                    DigitKey("3") { viewModel.addDigit('3') }
+                    EqualKey(
+                        onTap = {
+                            viewModel.evaluate()
+                            justDidEquals = true
+                        },
+                        onLong = {
+                            when (validatePins(digitsOnlyFromExpression().trim())) {
+                                PinResult.SECRET -> onUnlock()
+                                PinResult.DURESS -> onDuress()
+                                PinResult.NO_MATCH -> {}
+                            }
                         }
-                    })
+                    )
                 }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyPadding)) {
-                    // Inv -> autre raccourci 1/x, Rad -> toggle radians/degrés, π, %, 0, .
-                    FuncKey(if (angleInRadians) "Rad" else "Deg") { angleInRadians = !angleInRadians }
-                    FuncKey("Inv") { insertRaw("1/(") }
-                    FuncKey("π")   { insertRaw("π") }
-                    DigitKey("%")  { insertRaw("/100") }           // pourcentage comme /100
-                    DigitKey("0")  { digit("0") }
-                    DigitKey(".")  { dot() }
-                    EqualKey(onTap = { equalsNormal() }, onLong = {
-                        when (validatePins(digitsOnly().trim())) {
-                            PinResult.SECRET -> onUnlock()
-                            PinResult.DURESS -> onDuress()
-                            PinResult.NO_MATCH -> {}
+                Row(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                ) {
+                    // Toggles & divers
+                    FuncKey(if (radMode) "Rad" else "Deg") { viewModel.toggleAngleMode() }
+                    FuncKey("Inv") { viewModel.toggleInvMode() }
+                    FuncKey("π") { viewModel.addConstant("π") }
+                    DigitKey("%") {
+                        // pourcentage -> convertir le dernier nombre en /100 dans l’expression
+                        // Option simple : insérer “/100” (expression-first)
+                        viewModel.addBinaryOp("÷")
+                        viewModel.addDigit('1'); viewModel.addDigit('0'); viewModel.addDigit('0')
+                    }
+                    DigitKey("0") { viewModel.addDigit('0') }
+                    DigitKey(".") { viewModel.addDot() }
+                    EqualKey(
+                        onTap = {
+                            viewModel.evaluate()
+                            justDidEquals = true
+                        },
+                        onLong = {
+                            when (validatePins(digitsOnlyFromExpression().trim())) {
+                                PinResult.SECRET -> onUnlock()
+                                PinResult.DURESS -> onDuress()
+                                PinResult.NO_MATCH -> {}
+                            }
                         }
-                    })
+                    )
                 }
             }
         }
@@ -382,175 +418,6 @@ private fun CalculatorScreen(
             justDidEquals = false
         }
     }
-}
-
-/* =============== Parseur / Évaluateur =============== */
-
-private sealed interface Tok
-private data class Num(val v: Double): Tok
-private data class OpTok(val op: String): Tok   // + - * / ^ (× ÷ mappés)
-private data class FuncTok(val name: String): Tok // sin cos tan ln lg sqrt fact
-private data class Paren(val open: Boolean): Tok
-private object ConstPi : Tok
-private object ConstE  : Tok
-
-private val OP_PRECEDENCE = mapOf(
-    "+" to 1, "-" to 1,
-    "*" to 2, "/" to 2,
-    "^" to 3
-)
-private fun rightAssoc(op: String) = op == "^"
-
-private fun isCompleteExpression(s: String): Boolean {
-    if (s.isBlank()) return false
-    var bal = 0
-    for (c in s) {
-        if (c == '(') bal++
-        if (c == ')') bal--
-        if (bal < 0) return false
-    }
-    if (bal != 0) return false
-    val end = s.trim().lastOrNull() ?: return false
-    return end.isDigit() || end == ')' || end == 'π' || end == 'e'
-}
-
-private fun tokenize(raw: String): List<Tok> {
-    val src = raw
-        .replace('×','*')
-        .replace('÷','/')
-        .replace(',','.')
-        .replace("＋","+").replace("−","-")
-
-    val out = mutableListOf<Tok>()
-    var i = 0
-    while (i < src.length) {
-        val c = src[i]
-        when {
-            c.isWhitespace() -> i++
-            c.isDigit() || c=='.' -> {
-                val start = i
-                i++
-                while (i < src.length && (src[i].isDigit() || src[i]=='.')) i++
-                out += Num(src.substring(start, i).toDouble())
-            }
-            c == '(' -> { out += Paren(true); i++ }
-            c == ')' -> { out += Paren(false); i++ }
-            c == 'π' -> { out += ConstPi; i++ }
-            c == 'e' -> { out += ConstE; i++ }
-            "+-*/^".contains(c) -> { out += OpTok(c.toString()); i++ }
-            else -> {
-                // Fonctions: sin cos tan ln lg sqrt fact
-                val names = listOf("sin","cos","tan","ln","lg","sqrt","fact")
-                val match = names.firstOrNull { src.regionMatches(i, it, 0, it.length, ignoreCase = true) }
-                if (match != null) {
-                    out += FuncTok(match.lowercase())
-                    i += match.length
-                } else {
-                    // caractère inconnu -> on ignore
-                    i++
-                }
-            }
-        }
-    }
-    return out
-}
-
-private fun toRpn(tokens: List<Tok>): List<Tok> {
-    val out = mutableListOf<Tok>()
-    val stack = ArrayDeque<Tok>()
-    for (t in tokens) {
-        when (t) {
-            is Num, is ConstPi, is ConstE -> out += t
-            is FuncTok -> stack.addFirst(t)
-            is OpTok -> {
-                while (stack.isNotEmpty()) {
-                    val top = stack.first()
-                    if (top is OpTok) {
-                        val pTop = OP_PRECEDENCE[top.op] ?: -1
-                        val pCur = OP_PRECEDENCE[t.op] ?: -1
-                        val cond = if (rightAssoc(t.op)) (pCur < pTop) else (pCur <= pTop)
-                        if (cond) out += stack.removeFirst() else break
-                    } else if (top is FuncTok) {
-                        out += stack.removeFirst()
-                    } else break
-                }
-                stack.addFirst(t)
-            }
-            is Paren -> {
-                if (t.open) stack.addFirst(t) else {
-                    while (stack.isNotEmpty() && stack.first() !is Paren) {
-                        out += stack.removeFirst()
-                    }
-                    if (stack.isNotEmpty() && stack.first() is Paren) stack.removeFirst()
-                    if (stack.isNotEmpty() && stack.first() is FuncTok) out += stack.removeFirst()
-                }
-            }
-        }
-    }
-    while (stack.isNotEmpty()) out += stack.removeFirst()
-    return out
-}
-
-private fun evalRpn(rpn: List<Tok>, radians: Boolean): Double {
-    val st = ArrayDeque<Double>()
-    for (t in rpn) {
-        when (t) {
-            is Num -> st.addFirst(t.v)
-            is ConstPi -> st.addFirst(Math.PI)
-            is ConstE  -> st.addFirst(Math.E)
-            is OpTok -> {
-                val b = st.removeFirst()
-                val a = st.removeFirst()
-                val v = when (t.op) {
-                    "+" -> a + b
-                    "-" -> a - b
-                    "*" -> a * b
-                    "/" -> a / b
-                    "^" -> a.pow(b)
-                    else -> Double.NaN
-                }
-                st.addFirst(v)
-            }
-            is FuncTok -> {
-                val x = st.removeFirst()
-                val v = when (t.name) {
-                    "sin"  -> if (radians) sin(x) else sin(Math.toRadians(x))
-                    "cos"  -> if (radians) cos(x) else cos(Math.toRadians(x))
-                    "tan"  -> if (radians) tan(x) else tan(Math.toRadians(x))
-                    "ln"   -> ln(x)
-                    "lg"   -> log10(x)
-                    "sqrt" -> sqrt(x)
-                    "fact" -> {
-                        if (x < 0 || x > 170) Double.NaN
-                        else (1..x.toInt()).fold(1.0) { acc, i -> acc * i }
-                    }
-                    else -> Double.NaN
-                }
-                st.addFirst(v)
-            }
-            is Paren -> error("Paren in RPN")
-        }
-    }
-    return st.first()
-}
-
-private fun tryEvaluate(s: String, radians: Boolean): String {
-    return try {
-        if (!isCompleteExpression(s)) "" else {
-            val v = evalRpn(toRpn(tokenize(s)), radians)
-            val bd = BigDecimal(v).stripTrailingZeros()
-            val abs = bd.abs()
-            val useSci = (abs > BigDecimal("1000000000")) ||
-                    (abs != BigDecimal.ZERO && abs < BigDecimal("0.000001"))
-            if (useSci) {
-                val symbols = DecimalFormatSymbols.getInstance(Locale.FRANCE)
-                val fmt = DecimalFormat("0.######E0", symbols)
-                fmt.format(v)
-            } else {
-                bd.toPlainString().replace('.', ',')
-            }
-        }
-    } catch (_: Throwable) { "" }
 }
 
 /* =============== Composants de touches =============== */
@@ -571,18 +438,35 @@ private fun RowScope.BigDigitKey(label: String, onClick: () -> Unit) =
 
 @Composable
 private fun RowScope.OpKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyLight, onClick = onClick)
+    KeyBase(
+        label,
+        modifier = Modifier.weight(1f).fillMaxHeight(),
+        container = KeyLight,
+        onClick = onClick
+    )
 
 @Composable
 private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
-    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyLight, onClick = onClick)
+    KeyBase(
+        label,
+        modifier = Modifier.weight(1f).fillMaxHeight(),
+        container = KeyLight,
+        onClick = onClick
+    )
 
 @Composable
 private fun RowScope.MemKey(label: String) =
-    KeyBase(label, modifier = Modifier.weight(1f).fillMaxHeight(), container = KeyDark, contentColor = MemTextBlue, onClick = { })
+    KeyBase(
+        label,
+        modifier = Modifier.weight(1f).fillMaxHeight(),
+        container = KeyDark,
+        contentColor = MemTextBlue,
+        onClick = { /* mémoire à implémenter plus tard si besoin */ }
+    )
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
+@Composable
+private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
     Surface(
         modifier = Modifier.weight(1f).fillMaxHeight(),
         shape = RoundedCornerShape(14.dp),
@@ -592,17 +476,24 @@ private fun RowScope.MemKey(label: String) =
         onClick = onTap
     ) {
         Box(
-            Modifier.fillMaxSize().combinedClickable(onClick = onTap, onLongClick = onLong),
+            Modifier
+                .fillMaxSize()
+                .combinedClickable(onClick = onTap, onLongClick = onLong),
             contentAlignment = Alignment.Center
         ) {
-            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+            Text(
+                "=",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
         }
     }
 }
 
 /** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun EqualKeyTall(
+@Composable
+private fun EqualKeyTall(
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLong: () -> Unit
@@ -616,10 +507,16 @@ private fun RowScope.MemKey(label: String) =
         onClick = onTap
     ) {
         Box(
-            Modifier.fillMaxSize().combinedClickable(onClick = onTap, onLongClick = onLong),
+            Modifier
+                .fillMaxSize()
+                .combinedClickable(onClick = onTap, onLongClick = onLong),
             contentAlignment = Alignment.Center
         ) {
-            Text("=", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary)
+            Text(
+                "=",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
         }
     }
 }
