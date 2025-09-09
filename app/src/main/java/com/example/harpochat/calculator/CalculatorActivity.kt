@@ -45,6 +45,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.example.harpochat.ui.CalculatorViewModel
 
 /* =========================
  *  Activité Calculatrice
@@ -151,17 +152,6 @@ private fun prettifyResult(res: String): String {
     }
 }
 
-@Composable
-private fun exprFontFor(len: Int, landscape: Boolean): Float {
-    return when {
-        len <= 14 -> if (landscape) 52f else 56f
-        len <= 22 -> if (landscape) 44f else 48f
-        len <= 32 -> if (landscape) 36f else 40f
-        len <= 48 -> if (landscape) 30f else 32f
-        else      -> if (landscape) 26f else 28f
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CalculatorScreen(
@@ -200,9 +190,6 @@ private fun CalculatorScreen(
         val weightEspace = 0.02f
 
         Spacer(Modifier.weight(weightHaut))
-
-        val exprSize = exprFontFor(expressionText.length, isLandscape).sp
-        val resultFontSize = if (isLandscape) 36.sp else 40.sp
 
         // ====== Display ======
         Box(
@@ -587,32 +574,6 @@ private fun RowScope.MemKey(label: String) =
         contentColor = MemTextBlue,
         onClick = { /* mémoire à implémenter plus tard si besoin */ }
     )
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RowScope.EqualKey(onTap: () -> Unit, onLong: () -> Unit) {
-    Surface(
-        modifier = Modifier.weight(1f).fillMaxHeight(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.primary,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp,
-        onClick = onTap
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .combinedClickable(onClick = onTap, onLongClick = onLong),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "=",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimary
-            )
-        }
-    }
-}
 
 /** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
 @OptIn(ExperimentalFoundationApi::class)
