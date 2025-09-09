@@ -1,26 +1,9 @@
-/*
-——————What are you doing here ?——————
-⠀⣞⢽⢪⢣⢣⢣⢫⡺⡵⣝⡮⣗⢷⢽⢽⢽⣮⡷⡽⣜⣜⢮⢺⣜⢷⢽⢝⡽⣝
-⠸⡸⠜⠕⠕⠁⢁⢇⢏⢽⢺⣪⡳⡝⣎⣏⢯⢞⡿⣟⣷⣳⢯⡷⣽⢽⢯⣳⣫⠇
-⠀⠀⢀⢀⢄⢬⢪⡪⡎⣆⡈⠚⠜⠕⠇⠗⠝⢕⢯⢫⣞⣯⣿⣻⡽⣏⢗⣗⠏⠀
-⠀⠪⡪⡪⣪⢪⢺⢸⢢⢓⢆⢤⢀⠀⠀⠀⠀⠈⢊⢞⡾⣿⡯⣏⢮⠷⠁⠀⠀
-⠀⠀⠀⠈⠊⠆⡃⠕⢕⢇⢇⢇⢇⢇⢏⢎⢎⢆⢄⠀⢑⣽⣿⢝⠲⠉⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⡿⠂⠠⠀⡇⢇⠕⢈⣀⠀⠁⠡⠣⡣⡫⣂⣿⠯⢪⠰⠂⠀⠀⠀⠀
-⠀⠀⠀⠀⡦⡙⡂⢀⢤⢣⠣⡈⣾⡃⠠⠄⠀⡄⢱⣌⣶⢏⢊⠂⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⢝⡲⣜⡮⡏⢎⢌⢂⠙⠢⠐⢀⢘⢵⣽⣿⡿⠁⠁⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠨⣺⡺⡕⡕⡱⡑⡆⡕⡅⡕⡜⡼⢽⡻⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⣼⣳⣫⣾⣵⣗⡵⡱⡡⢣⢑⢕⢜⢕⡝⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⣴⣿⣾⣿⣿⣿⡿⡽⡑⢌⠪⡢⡣⣣⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⡟⡾⣿⢿⢿⢵⣽⣾⣼⣘⢸⢸⣞⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠁⠇⠡⠩⡫⢿⣝⡻⡮⣒⢽⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-————————————————————————————————————
-*/
-
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt") // nécessaire pour Room        // <= pour l’annotation processor Room
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+    // Room avec KSP (aligne la version si tu changes ta version de Kotlin)
+    id("com.google.devtools.ksp") version "2.0.21-1.0.25"
 }
 
 android {
@@ -33,7 +16,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -46,83 +28,104 @@ android {
             )
         }
     }
+
+    // ✅ AGP 8+
+    packaging {
+        resources {
+            // Conflits ML Kit (une seule occurrence des modèles)
+            pickFirsts += listOf(
+                "assets/mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
+                "assets/mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
+                "assets/mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
+                "mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
+                "mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
+                "mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
+                "**/mlkit_barcode_models/*.tflite"
+            )
+        }
+    }
+
+    // ✅ Compat AGP 7.x si nécessaire (peut être supprimé si tu es sûr d'être en 8+)
+    @Suppress("DEPRECATION")
+    packagingOptions {
+        resources {
+            pickFirsts += setOf(
+                "assets/mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
+                "assets/mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
+                "assets/mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
+                "mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
+                "mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
+                "mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
+                "**/mlkit_barcode_models/*.tflite"
+            )
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-    buildFeatures {
-        compose = true
-    }
+    kotlinOptions { jvmTarget = "17" }
+
+    buildFeatures { compose = true }
 }
 
 dependencies {
+    // ---------- Compose ----------
+    implementation(platform("androidx.compose:compose-bom:2024.09.01"))
 
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
+    implementation("androidx.activity:activity-compose:1.9.2")
 
-    // ViewModel pour Jetpack Compose
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended") // version via BOM
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:test-manifest")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+
+    // ---------- Tests ----------
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+
+    // ---------- Architecture / Coroutines ----------
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
-
-    // Sécurité : stockage chiffré via Keystore
-    implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
-
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // Protocole Signal (Java)
+    // ---------- Sécurité ----------
+    implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
+
+    // ---------- Protocole Signal ----------
     implementation("org.whispersystems:signal-protocol-java:2.8.1")
 
-    implementation("androidx.compose.material:material-icons-extended:<compose-version>")
-
-    // ========= Room =========
+    // ---------- Room (KSP, pas kapt) ----------
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    kapt("androidx.room:room-compiler:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
-    // ========= SQLCipher (SupportFactory) =========
+    // ---------- SQLCipher (pour SupportFactory dans AppDatabase) ----------
     implementation("net.zetetic:android-database-sqlcipher:4.5.4")
-
-    // (optionnel) sqlite-ktx utilitaires
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
-    // Compose (si pas déjà)
-    implementation("androidx.compose.runtime:runtime:1.6.8")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    // ---------- ML Kit Barcode ----------
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
-    // CameraX
+    // ---------- CameraX ----------
     val camerax = "1.3.4"
     implementation("androidx.camera:camera-core:$camerax")
     implementation("androidx.camera:camera-camera2:$camerax")
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
 
-    // ML Kit Barcode
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
-
-    // ZXing (génération)
+    // ---------- ZXing (génération QR) ----------
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("com.google.zxing:core:3.5.3")
-
-    // Lifecycle-compose (pour LocalLifecycleOwner)
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
-
-    // Activity compose (pour rememberLauncherForActivityResult)
-    implementation("androidx.activity:activity-compose:1.9.2")
-
 }
