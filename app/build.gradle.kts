@@ -85,7 +85,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended") // version via BOM
 
     debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:test-manifest")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
