@@ -19,7 +19,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +39,12 @@ import androidx.core.content.edit
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
 import kotlinx.coroutines.delay
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /* =========================
  *  Activité Calculatrice
@@ -102,6 +110,47 @@ private enum class PinResult { SECRET, DURESS, NO_MATCH }
  *     Écran Calculatrice
  * ============================== */
 
+/** Ajoute des espaces fines insécables entre les milliers: 1234567.89 -> 1 234 567.89 */
+private fun groupThousands(num: String): String {
+    // on ne touche pas aux notations scientifiques
+    if (num.contains('E') || num.contains('e')) return num
+    val parts = num.split('.', limit = 2)
+    val intPart = parts[0]
+    val decPart = if (parts.size > 1) parts[1] else null
+
+    val sb = StringBuilder()
+    var count = 0
+    for (i in intPart.length - 1 downTo 0) {
+        sb.append(intPart[i])
+        count++
+        if (count == 3 && i > 0) {
+            sb.append('\u202F') // espace fine insécable
+            count = 0
+        }
+    }
+    val groupedInt = sb.reverse().toString()
+    return if (decPart != null) "$groupedInt.$decPart" else groupedInt
+}
+
+/** Remplace chaque nombre (\\d+(\\.\\d+)?) de l'expression par une version groupée */
+private fun prettifyExpression(expr: String): String {
+    if (expr.isBlank()) return "0"
+    val numberRegex = Regex("""\d+(?:\.\d+)?""")
+    return numberRegex.replace(expr) { m -> groupThousands(m.value) }
+}
+
+/** Préparation du texte de preview (résultat) pour l’affichage */
+private fun prettifyResult(res: String): String {
+    if (res.isBlank()) return res
+    // gère 1.23E9 -> on groupe seulement la partie mantisse AVANT 'E'
+    return if (res.contains('E')) {
+        val i = res.indexOf('E')
+        groupThousands(res.substring(0, i)) + res.substring(i)
+    } else {
+        groupThousands(res)
+    }
+}
+
 @Composable
 private fun exprFontFor(len: Int, landscape: Boolean): Float {
     return when {
@@ -152,9 +201,8 @@ private fun CalculatorScreen(
 
         Spacer(Modifier.weight(weightHaut))
 
-        val exprFontSize = if (isLandscape) 52.sp else 56.sp
+        val exprSize = exprFontFor(expressionText.length, isLandscape).sp
         val resultFontSize = if (isLandscape) 36.sp else 40.sp
-
 
         // ====== Display ======
         Box(
@@ -165,13 +213,23 @@ private fun CalculatorScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.CenterEnd
         ) {
+            // Mesure de la largeur disponible (en px) SANS BoxWithConstraints
+            var maxWidthPx by remember { mutableFloatStateOf(0f) }
+            val containerMod = Modifier
+                .fillMaxSize()
+                .onSizeChanged { maxWidthPx = it.width.toFloat() }
+
+            @OptIn(ExperimentalTextApi::class)
+            val textMeasurer = rememberTextMeasurer()
+
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = containerMod,
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.End
             ) {
+                // -------- Expression (grouping + autosize synchrone + scroll si nécessaire) --------
                 AnimatedContent(
-                    targetState = expressionText.ifBlank { "0" },
+                    targetState = expressionText,
                     transitionSpec = {
                         if (justDidEquals) {
                             slideInVertically(tween(180)) { +it } togetherWith
@@ -181,48 +239,92 @@ private fun CalculatorScreen(
                         }
                     },
                     label = "expr-anim"
-                ) { text ->
+                ) { raw ->
+                    val pretty = prettifyExpression(raw.ifBlank { "0" })
+
+                    val minSp = if (isLandscape) 26f else 28f
+                    val maxSp = 56f
+                    val baseStyle = MaterialTheme.typography.headlineLarge
+
+                    fun fits(fs: Float): Boolean {
+                        if (maxWidthPx <= 0f) return true // pas encore mesuré -> éviter un saut
+                        val layout = textMeasurer.measure(
+                            text = AnnotatedString(pretty),
+                            style = baseStyle.copy(fontSize = fs.sp),
+                            maxLines = 1
+                        )
+                        return layout.size.width <= maxWidthPx
+                    }
+
+                    // Recherche binaire -> taille correcte AVANT affichage
+                    var lo = minSp
+                    var hi = maxSp
+                    var chosen = minSp
+                    repeat(12) {
+                        val mid = (lo + hi) / 2f
+                        if (fits(mid)) { chosen = mid; lo = mid } else { hi = mid }
+                    }
+
+                    val overflowEvenAtMin = !fits(minSp)
+                    val scroll = rememberScrollState()
+                    LaunchedEffect(pretty, overflowEvenAtMin) {
+                        if (overflowEvenAtMin) scroll.scrollTo(scroll.maxValue)
+                    }
+
                     Text(
-                        text = text,
+                        text = pretty,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = exprFontSize),
+                        style = baseStyle.copy(fontSize = chosen.sp),
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip,
                         textAlign = TextAlign.End,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (overflowEvenAtMin) Modifier.horizontalScroll(scroll) else Modifier)
                     )
                 }
 
                 Spacer(Modifier.height(6.dp))
 
-                AnimatedContent(
-                    targetState = previewText,
-                    transitionSpec = {
-                        if (justDidEquals) {
-                            slideInVertically(tween(160)) { +it } togetherWith
-                                    slideOutVertically(tween(160)) { -it }
+                // -------- Preview (hauteur fixe = pas de "saut") --------
+                val previewHeight = if (isLandscape) 44.dp else 52.dp
+                Box(
+                    Modifier.fillMaxWidth().height(previewHeight),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    AnimatedContent(
+                        targetState = previewText,
+                        transitionSpec = {
+                            if (justDidEquals) {
+                                slideInVertically(tween(160)) { +it } togetherWith
+                                        slideOutVertically(tween(160)) { -it }
+                            } else {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            }
+                        },
+                        label = "preview-anim"
+                    ) { txt ->
+                        if (txt.isNotEmpty()) {
+                            Text(
+                                text = prettifyResult(txt),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f),
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontSize = (if (isLandscape) 36.sp else 40.sp)
+                                ),
+                                maxLines = 1,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         } else {
-                            EnterTransition.None togetherWith ExitTransition.None
+                            Spacer(Modifier)
                         }
-                    },
-                    label = "preview-anim"
-                ) { txt ->
-                    if (txt.isNotEmpty()) {
-                        Text(
-                            text = txt,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
-                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = resultFontSize),
-                            maxLines = 1,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Spacer(Modifier.height(0.dp))
                     }
                 }
             }
         }
+
+
 
         Spacer(Modifier.weight(weightEspace))
 
@@ -338,7 +440,7 @@ private fun CalculatorScreen(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    FuncKey("x!") { viewModel.addFactorial() }   // postfix “!”
+                    FuncKey("x!") { viewModel.addFactorial() }
                     FuncKey("√") { viewModel.addFunction("sqrt") }
                     FuncKey("ʸ√X") {
                         // y-th root of X == X^(1/y) -> on insère ^ puis (1/ … )
@@ -365,53 +467,55 @@ private fun CalculatorScreen(
                     DigitKey("6") { viewModel.addDigit('6') }
                     OpKey("+") { viewModel.addBinaryOp("+") }
                 }
+
+                // ✅ Fusion des 2 dernières rangées : 6 cases à gauche, 1 case "=" à droite
                 Row(
-                    Modifier.weight(1f).fillMaxWidth(),
+                    Modifier.weight(2f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    FuncKey(if (invMode) "sin⁻¹" else "sin") {
-                        viewModel.addFunction(if (invMode) "asin" else "sin")
-                    }
-                    FuncKey(if (invMode) "cos⁻¹" else "cos") {
-                        viewModel.addFunction(if (invMode) "acos" else "cos")
-                    }
-                    FuncKey(if (invMode) "tan⁻¹" else "tan") {
-                        viewModel.addFunction(if (invMode) "atan" else "tan")
-                    }
-                    DigitKey("1") { viewModel.addDigit('1') }
-                    DigitKey("2") { viewModel.addDigit('2') }
-                    DigitKey("3") { viewModel.addDigit('3') }
-                    /*EqualKey(
-                        onTap = {
-                            viewModel.evaluate()
-                            justDidEquals = true
-                        },
-                        onLong = {
-                            when (validatePins(digitsOnlyFromExpression().trim())) {
-                                PinResult.SECRET -> onUnlock()
-                                PinResult.DURESS -> onDuress()
-                                PinResult.NO_MATCH -> {}
+                    // 6 cases (2 rangées x 6 touches)
+                    Column(
+                        modifier = Modifier.weight(6f).fillMaxHeight(), // <<--- 6f (au lieu de 3f)
+                        verticalArrangement = Arrangement.spacedBy(KeyPadding)
+                    ) {
+                        Row(
+                            Modifier.weight(1f).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                        ) {
+                            FuncKey(if (invMode) "sin⁻¹" else "sin") {
+                                viewModel.addFunction(if (invMode) "asin" else "sin")
                             }
+                            FuncKey(if (invMode) "cos⁻¹" else "cos") {
+                                viewModel.addFunction(if (invMode) "acos" else "cos")
+                            }
+                            FuncKey(if (invMode) "tan⁻¹" else "tan") {
+                                viewModel.addFunction(if (invMode) "atan" else "tan")
+                            }
+                            DigitKey("1") { viewModel.addDigit('1') }
+                            DigitKey("2") { viewModel.addDigit('2') }
+                            DigitKey("3") { viewModel.addDigit('3') }
                         }
-                    )*/
-                }
-                Row(
-                    Modifier.weight(1f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(KeyPadding)
-                ) {
-                    // Toggles & divers
-                    FuncKey(if (radMode) "Rad" else "Deg") { viewModel.toggleAngleMode() }
-                    FuncKey("Inv") { viewModel.toggleInvMode() }
-                    FuncKey("π") { viewModel.addConstant("π") }
-                    DigitKey("%") {
-                        // pourcentage -> convertir le dernier nombre en /100 dans l’expression
-                        // Option simple : insérer “/100” (expression-first)
-                        viewModel.addBinaryOp("÷")
-                        viewModel.addDigit('1'); viewModel.addDigit('0'); viewModel.addDigit('0')
+                        Row(
+                            Modifier.weight(1f).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(KeyPadding)
+                        ) {
+                            FuncKey(if (radMode) "Rad" else "Deg") { viewModel.toggleAngleMode() }
+                            FuncKey("Inv") { viewModel.toggleInvMode() }
+                            FuncKey("π") { viewModel.addConstant("π") }
+                            DigitKey("%") {
+                                viewModel.addBinaryOp("÷")
+                                viewModel.addDigit('1'); viewModel.addDigit('0'); viewModel.addDigit('0')
+                            }
+                            DigitKey("0") { viewModel.addDigit('0') }
+                            DigitKey(".") { viewModel.addDot() }
+                        }
                     }
-                    DigitKey("0") { viewModel.addDigit('0') }
-                    DigitKey(".") { viewModel.addDot() }
-                    EqualKey(
+
+                    // "=" occupe 1 case (même largeur qu’une touche)
+                    EqualKeyTall(
+                        modifier = Modifier
+                            .weight(1f)                    // <<--- 1f (case unique)
+                            .fillMaxHeight(),              // sur 2 rangées
                         onTap = {
                             viewModel.evaluate()
                             justDidEquals = true
@@ -438,6 +542,7 @@ private fun CalculatorScreen(
         }
     }
 }
+
 
 /* =============== Composants de touches =============== */
 
