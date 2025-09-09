@@ -1,4 +1,4 @@
-package com.example.harpochat.calculator
+package com.example.harpochat.ui
 
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,6 +10,7 @@ import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 import kotlin.math.*
+import kotlin.text.iterator
 
 class CalculatorViewModel : ViewModel() {
 
@@ -88,14 +89,13 @@ class CalculatorViewModel : ViewModel() {
     fun addFactorial() {
         val e = _expression.value
         if (e.isNotEmpty() && (e.last().isDigit() || e.last() == ')' || e.last() == 'π' || e.last() == 'e')) {
-            _expression.value = e + "!"
+            _expression.value = "$e!"
             computePreview()
         }
     }
 
-    fun reciprocalOfLastTerm() {
-        wrapLastTermWith("1/(", ")")
-    }
+
+    fun reciprocalOfLastTerm() = wrapLastTermAsReciprocal()
 
     fun toggleSignOfLastNumber() {
         val e = _expression.value
@@ -154,13 +154,14 @@ class CalculatorViewModel : ViewModel() {
         computePreview()
     }
 
-    private fun wrapLastTermWith(prefix: String, suffix: String) {
+    private fun wrapLastTermAsReciprocal() {
         val e = _expression.value
         val (s, t) = lastTermRange(e)
         if (s < 0) return
-        _expression.value = e.substring(0, s) + prefix + e.substring(s, t) + suffix + e.substring(t)
+        _expression.value = e.substring(0, s) + "1/(" + e.substring(s, t) + ")" + e.substring(t)
         computePreview()
     }
+
 
     private fun computePreview() {
         _preview.value = tryEvaluate(_expression.value, _radMode.value)
@@ -207,7 +208,7 @@ private fun normalize(raw: String): String {
         .replace(',', '.')
 
     // Remplacer "<terme>!" par "fact(<terme>)"
-    val factRegex = Regex("""((?:\d+(?:\.\d+)?|π|e|\)))(!)""")
+    val factRegex = Regex("""(\d+(?:\.\d+)?|π|e|\))(!)""")
     while (true) {
         val m = factRegex.find(s) ?: break
         val before = s.substring(0, m.range.first)
@@ -290,15 +291,22 @@ private fun toRpn(tokens: List<Tok>): List<Tok> {
             is FuncTok -> stack.addFirst(t)
             is OpTok -> {
                 while (stack.isNotEmpty()) {
-                    val top = stack.first()
-                    if (top is OpTok) {
-                        val pTop = OP_PRECEDENCE[top.op] ?: -1
-                        val pCur = OP_PRECEDENCE[t.op] ?: -1
-                        val cond = if (rightAssoc(t.op)) (pCur < pTop) else (pCur <= pTop)
-                        if (cond) out += stack.removeFirst() else break
-                    } else if (top is FuncTok) {
-                        out += stack.removeFirst()
-                    } else break
+                    when (val top = stack.first()) {
+                        is OpTok -> {
+                            val pTop = OP_PRECEDENCE[top.op] ?: -1
+                            val pCur = OP_PRECEDENCE[t.op] ?: -1
+                            val cond = if (rightAssoc(t.op)) (pCur < pTop) else (pCur <= pTop)
+                            if (cond) {
+                                out += stack.removeFirst()
+                            } else {
+                                break
+                            }
+                        }
+                        is FuncTok -> {
+                            out += stack.removeFirst()
+                        }
+                        else -> break
+                    }
                 }
                 stack.addFirst(t)
             }
@@ -442,8 +450,8 @@ private fun lastTermRange(s: String): Pair<Int, Int> {
             }
             i--
         }
-        val start = if (i >= 0) i else 0
-        return if (start < s.length) start to (s.length) else -1 to -1
+        val start = max(0, i)
+        return if (start < s.length) start to s.length else -1 to -1
     }
     if (s[i] == 'π' || s[i] == 'e') return i to (i + 1)
 
