@@ -48,8 +48,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -190,6 +188,8 @@ private fun CalculatorScreen(
     val previewText by viewModel.preview.collectAsState()
     val invMode by viewModel.invMode.collectAsState()
     val radMode by viewModel.radMode.collectAsState()
+    val memoryValue by viewModel.memory.collectAsState()
+    val hasMemory = memoryValue != null
 
     // Animation “just did equals”
     var justDidEquals by remember { mutableStateOf(false) }
@@ -350,7 +350,10 @@ private fun CalculatorScreen(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
+                    MemKey("MC", hasMemory) { viewModel.memoryClear() }
+                    MemKey("M+", hasMemory) { viewModel.memoryAdd() }
+                    MemKey("M-", hasMemory) { viewModel.memorySubtract() }
+                    MemKey("MR", hasMemory) { viewModel.memoryRecall() }
                 }
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -430,8 +433,11 @@ private fun CalculatorScreen(
                     FuncKey("(") { viewModel.addLeftParen() }
                     FuncKey(")") { viewModel.addRightParen() }
                     FuncKey("±") { viewModel.toggleSignOfLastNumber() }
-                    FuncKey("1/x") { viewModel.reciprocalOfLastTerm() }
-                    MemKey("MC"); MemKey("M+"); MemKey("M-"); MemKey("MR")
+                    //FuncKey("1/x") { viewModel.reciprocalOfLastTerm() }
+                    MemKey("MC", hasMemory) { viewModel.memoryClear() }
+                    MemKey("M+", hasMemory) { viewModel.memoryAdd() }
+                    MemKey("M-", hasMemory) { viewModel.memorySubtract() }
+                    MemKey("MR", hasMemory) { viewModel.memoryRecall() }
                 }
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -588,14 +594,41 @@ private fun RowScope.FuncKey(label: String, onClick: () -> Unit) =
     )
 
 @Composable
-private fun RowScope.MemKey(label: String) =
-    KeyBase(
-        label,
+private fun RowScope.MemKey(
+    label: String,
+    hasMemory: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
         modifier = Modifier.weight(1f).fillMaxHeight(),
-        container = KeyDark,
+        shape = RoundedCornerShape(14.dp),
+        color = KeyDark,
         contentColor = MemTextBlue,
-        onClick = { /* mémoire à implémenter plus tard si besoin */ }
-    )
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+        onClick = onClick
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // Texte
+            Text(
+                label,
+                style = MaterialTheme.typography.titleLarge,
+                color = MemTextBlue
+            )
+            // Petit point en haut à droite si mémoire
+            if (hasMemory) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(8.dp)
+                        .background(MemTextBlue, RoundedCornerShape(50))
+                )
+            }
+        }
+    }
+}
+
 
 /** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
 @OptIn(ExperimentalFoundationApi::class)

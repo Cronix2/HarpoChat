@@ -2,10 +2,12 @@
   <dictionary name="project">
     <words>
       <w>acos</w>
+      <w>addr</w>
       <w>atan</w>
       <w>autosize</w>
       <w>chiffrées</w>
       <w>codepair</w>
+      <w>composebom</w>
       <w>courrant</w>
       <w>défaut</w>
       <w>d’anim</w>
