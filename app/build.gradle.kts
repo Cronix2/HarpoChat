@@ -72,11 +72,15 @@ android {
 
 dependencies {
     // ---------- Compose ----------
-    implementation(platform("androidx.compose:compose-bom:2024.09.01"))
+    val composebomVersion = "2025.08.01"
+    implementation(platform("androidx.compose:compose-bom:$composebomVersion"))
 
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
-    implementation("androidx.activity:activity-compose:1.9.2")
+    val coreVersion = "1.17.0"
+    val lifecycleVersion = "2.9.3"
+    val activityVersion = "1.10.1"
+    implementation("androidx.core:core-ktx:$coreVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
+    implementation("androidx.activity:activity-compose:$activityVersion")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -86,40 +90,49 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:$composebomVersion"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // ---------- Tests ----------
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    val junitVersion = "4.13.2"
+    val androidJunitVersion = "1.3.0"
+    val espressoVersion = "3.7.0"
+    testImplementation("junit:junit:$junitVersion")
+    androidTestImplementation("androidx.test.ext:junit:$androidJunitVersion")
+    androidTestImplementation("androidx.test.espresso:espresso-core:$espressoVersion")
 
     // ---------- Architecture / Coroutines ----------
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    val kotlinVersion = "1.10.2"
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinVersion")
 
     // ---------- Sécurité ----------
-    implementation("androidx.security:security-crypto-ktx:1.1.0-alpha06")
+    val securityVersion = "1.1.0"
+    implementation("androidx.security:security-crypto-ktx:$securityVersion")
 
     // ---------- Protocole Signal ----------
-    implementation("org.whispersystems:signal-protocol-java:2.8.1")
+    val signalVersion = "2.8.1"
+    implementation("org.whispersystems:signal-protocol-java:$signalVersion")
 
     // ---------- Room (KSP, pas kapt) ----------
-    val roomVersion = "2.6.1"
+    val roomVersion = "2.7.2"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // ---------- SQLCipher (pour SupportFactory dans AppDatabase) ----------
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
-    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+    val sqlcipherVersion = "4.5.4"
+    val sqliteVersion = "2.5.2"
+    implementation("net.zetetic:android-database-sqlcipher:$sqlcipherVersion")
+    implementation("androidx.sqlite:sqlite-ktx:$sqliteVersion")
 
     // ---------- ML Kit Barcode ----------
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    val mlkitVersion = "17.3.0"
+    implementation("com.google.mlkit:barcode-scanning:$mlkitVersion")
 
     // ---------- CameraX ----------
-    val camerax = "1.3.4"
+    val camerax = "1.4.2"
     implementation("androidx.camera:camera-core:$camerax")
     implementation("androidx.camera:camera-camera2:$camerax")
     implementation("androidx.camera:camera-lifecycle:$camerax")

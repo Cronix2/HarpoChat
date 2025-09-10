@@ -28,7 +28,61 @@ class CalculatorViewModel : ViewModel() {
 
     private var justEvaluated = false
 
+    private val _memory = MutableStateFlow<Double?>(null)
+    val memory: StateFlow<Double?> = _memory.asStateFlow()
+
     // ---------- Inputs ----------
+
+    fun memoryClear() {
+        _memory.value = null
+    }
+
+    fun memoryAdd() {
+        val v = valueForMemory() ?: return
+        _memory.value = (_memory.value ?: 0.0) + v
+    }
+
+    fun memorySubtract() {
+        val v = valueForMemory() ?: return
+        _memory.value = (_memory.value ?: 0.0) - v
+    }
+
+    fun memoryRecall() {
+        val v = _memory.value ?: return
+        insertOrReplace(formatForExpr(v))
+    }
+
+    // ---------- helpers mémoire ----------
+
+    /** Prend la meilleure source de valeur pour M+/M- : preview > éval complète > dernier nombre */
+    private fun valueForMemory(): Double? {
+        // 1) preview si dispo
+        val p = _preview.value
+        if (p.isNotBlank()) {
+            p.replace(',', '.').toDoubleOrNull()?.let { return it }
+        }
+
+        // 2) expression complète (en fermant les parenthèses invisibles)
+        val balanced = balanceRightParens(_expression.value)
+        if (isCompleteExpression(balanced)) {
+            return try {
+                evalRpn(toRpn(tokenize(balanced)), _radMode.value)
+            } catch (_: Throwable) { null }
+        }
+
+        // 3) dernier nombre tapé (si pas d’expr complète)
+        val (s, e) = lastNumberRange(_expression.value)
+        if (s >= 0 && e > s) {
+            return _expression.value.substring(s, e).replace(',', '.').toDoubleOrNull()
+        }
+        return null
+    }
+
+    private fun formatForExpr(v: Double): String {
+        val bd = BigDecimal(v).setScale(10, RoundingMode.HALF_UP).stripTrailingZeros()
+        return bd.toPlainString() // on garde le point, l'UI affiche avec virgule si tu veux
+    }
+
 
     fun addDigit(d: Char) {
         if (!d.isDigit()) return
