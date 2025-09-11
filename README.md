@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-    <h1 align="center">HarpoChat</h1> </p>
+    <h1 align="center">HarpoChat</h1>
+</p>
 
 <p align="center">
     <em><code>❯ Discreet end‑to‑end encrypted chat disguised as a full‑featured scientific calculator</code></em>
@@ -175,8 +176,6 @@ There are currently **no automated tests**.  Potential tests include:
 - **Conversation Creation & Management:** Add UI and logic to create new threads, manage contacts and group chats.
 - **Secure PIN Configuration:** Provide a settings screen to change the secret and duress PINs and to configure biometric unlock.
 - **Rich Media & Attachments:** Support sending images, files and voice messages.
-- **Improved Calculator:** Add parentheses support and additional scientific functions and refine animations.
-- **Persistent App Settings:** Persist dark/light mode preferences and custom themes.
 
 ---
 
