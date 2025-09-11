@@ -3,8 +3,7 @@
 </p>
 
 <p align="center">
-    <h1 align="center">HarpoChat</h1>
-</p>
+    <h1 align="center">HarpoChat</h1> </p>
 
 <p align="center">
     <em><code>❯ Discreet end‑to‑end encrypted chat disguised as a full‑featured scientific calculator</code></em>
