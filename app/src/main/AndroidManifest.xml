@@ -61,5 +61,9 @@
         <activity android:name=".messaging.CodepairActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".settings.PinSettingsActivity"
+            android:exported="false" />
+
     </application>
 </manifest>

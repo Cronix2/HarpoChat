@@ -20,6 +20,7 @@ package com.example.harpochat.messaging
 import android.content.Intent
 import android.os.Bundle
 import android.app.Activity
+import android.app.AlertDialog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,7 +32,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -56,10 +56,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.harpochat.ChatActivity
 import com.example.harpochat.data.ThreadEntity
+import com.example.harpochat.settings.PinSettingsActivity
+import com.example.harpochat.security.SecureStore
+import com.example.harpochat.calculator.CalculatorActivity
 import java.util.UUID
+
+
+
+/* =========================
+ * Variables declaration
+ * =========================*/
+
+private const val DEFAULT_SECRET = "527418"
+private const val DEFAULT_DURESS = "1234"
+private const val KEY_PIN_WARNING_SHOWN = "pin_warning_shown" // pour ne pas spammer
 
 /* =========================
  * One-stop palette for this screen
@@ -84,6 +98,7 @@ private object ConvColors {
 class ConversationsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        maybeWarnDefaultPin(this)
         enableEdgeToEdge()
         actionBar?.hide()
 
@@ -297,4 +312,65 @@ private fun SheetActionRow(
             .clickable { onClick() }
             .padding(vertical = 2.dp)
     )
+}
+/*
+fun maybeWarnDefaultPin(context: Context) {
+    val prefs = SecureStore.prefs(context)
+
+    val secret = prefs.getString(CalculatorActivity.KEY_SECRET_PIN, "") ?: ""
+    val duress = prefs.getString(CalculatorActivity.KEY_DURESS_PIN, "") ?: ""
+    val alreadyShown = prefs.getBoolean(KEY_PIN_WARNING_SHOWN, false)
+    val usingDefaults = (secret == DEFAULT_SECRET) || (duress == DEFAULT_DURESS)
+
+    val activity = context as? Activity ?: return
+    if (usingDefaults && !alreadyShown) {
+        AlertDialog.Builder(activity)
+            .setTitle("PIN par défaut détecté")
+            .setMessage(
+                "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
+                        "Par sécurité, changez-les maintenant."
+            )
+            .setCancelable(false)
+            .setPositiveButton("Changer maintenant") { _, _ ->
+                activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
+                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
+            }
+            .setNegativeButton("Plus tard") { _, _ ->
+                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
+            }
+            .show()
+    }
+}
+*/
+
+
+fun maybeWarnDefaultPin(activity: Activity) {
+    val prefs = SecureStore.prefs(activity)
+
+    val secret = prefs.getString(CalculatorActivity.KEY_SECRET_PIN, "") ?: ""
+    val duress = prefs.getString(CalculatorActivity.KEY_DURESS_PIN, "") ?: ""
+    val alreadyShown = prefs.getBoolean(KEY_PIN_WARNING_SHOWN, false)
+    val usingDefaults = (secret == DEFAULT_SECRET) || (duress == DEFAULT_DURESS)
+
+    if (!usingDefaults || alreadyShown) return
+
+    activity.runOnUiThread {
+        if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+
+        AlertDialog.Builder(activity)
+            .setTitle("PIN par défaut détecté")
+            .setMessage(
+                "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
+                        "Par sécurité, changez-les maintenant."
+            )
+            .setCancelable(false)
+            .setPositiveButton("Changer maintenant") { _, _ ->
+                activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
+                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
+            }
+            .setNegativeButton("Plus tard") { _, _ ->
+                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
+            }
+            .show()
+    }
 }
