@@ -2,8 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    // Room avec KSP (aligne la version si tu changes ta version de Kotlin)
-    id("com.google.devtools.ksp") version "2.0.21-1.0.25"
+    id("com.google.devtools.ksp") version "2.0.21-1.0.27"
 }
 
 android {
@@ -86,7 +85,7 @@ dependencies {
 
     debugImplementation(libs.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.ui.test.manifest)
-    androidTestImplementation(libs.androidx.compose.bom.v20250801)
+    androidTestImplementation(platform(libs.androidx.compose.bom.v20250801))
     androidTestImplementation(libs.ui.test.junit4)
 
     // ---------- Tests ----------
