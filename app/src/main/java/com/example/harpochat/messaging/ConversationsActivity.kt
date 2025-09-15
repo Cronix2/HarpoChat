@@ -15,16 +15,17 @@
 ⠀⠀⠀⠀⠁⠇⠡⠩⡫⢿⣝⡻⡮⣒⢽⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ————————————————————————————————————
 */
+
 package com.example.harpochat.messaging
 
-import android.content.Intent
-import android.os.Bundle
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,20 +36,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog as M3AlertDialog // alias pour éviter le conflit avec android.app.AlertDialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,61 +49,62 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.harpochat.ChatActivity
-import com.example.harpochat.data.ThreadEntity
-import com.example.harpochat.settings.PinSettingsActivity
-import com.example.harpochat.security.SecureStore
 import com.example.harpochat.calculator.CalculatorActivity
+import com.example.harpochat.data.ThreadEntity
+import com.example.harpochat.security.SecureStore
+import com.example.harpochat.settings.PinSettingsActivity
 import java.util.UUID
 
-
-
 /* =========================
- * Variables declaration
- * =========================*/
-
+ * Constantes
+ * ========================= */
 private const val DEFAULT_SECRET = "527418"
 private const val DEFAULT_DURESS = "1234"
-private const val KEY_PIN_WARNING_SHOWN = "pin_warning_shown" // pour ne pas spammer
+private const val KEY_PIN_WARNING_SHOWN = "pin_warning_shown"
 
 /* =========================
- * One-stop palette for this screen
+ * Palette locale
  * ========================= */
 private object ConvColors {
-    // surfaces / backgrounds
-    val bg            = Color(0xFF0F1115)
-    val sheetBg       = bg
-    val rowAvatarBg   = Color(0xFF2A2F3A)
-    val divider       = Color(0xFF1E2430)
+    // Surfaces / fonds
+    val bg          = Color(0xFF0F1115)
+    val sheetBg     = bg
+    val rowAvatarBg = Color(0xFF2A2F3A)
+    val divider     = Color(0xFF1E2430)
 
-    // text
+    // Texte
     val textPrimary   = Color(0xFFFFFFFF)
     val textSecondary = Color(0xFF8C96A7)
 
-    // icons
-    val iconDefault   = Color(0xFFB7C0D0)
-    val iconAccent    = Color(0xFFFFFFFF)
+    // Icônes
+    val iconDefault = Color(0xFFB7C0D0)
+    val iconAccent  = Color(0xFFFFFFFF)
 }
 
+/* =========================
+ * Activity
+ * ========================= */
 @OptIn(ExperimentalMaterial3Api::class)
 class ConversationsActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        maybeWarnDefaultPin(this)
+
         enableEdgeToEdge()
         actionBar?.hide()
 
+        // Alerte "PIN par défaut" si nécessaire
+        maybeWarnDefaultPin(this)
+
         setContent {
-            // keep Material3 dark scheme; we mostly use ConvColors directly below
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    background = ConvColors.bg,
-                    surface    = ConvColors.bg,
+                    background   = ConvColors.bg,
+                    surface      = ConvColors.bg,
                     onBackground = ConvColors.textPrimary,
-                    primary    = ConvColors.iconAccent
+                    primary      = ConvColors.iconAccent
                 )
             ) {
-
-                // ==== VM + state ====
                 val vm: ConversationsViewModel = viewModel()
                 val threads by vm.threads.collectAsState()
 
@@ -122,17 +113,16 @@ class ConversationsActivity : ComponentActivity() {
                 var newTitle by remember { mutableStateOf(TextFieldValue("")) }
 
                 val context = this@ConversationsActivity
+
                 val qrLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.StartActivityForResult()
                 ) { res ->
                     if (res.resultCode == Activity.RESULT_OK) {
                         val payload = res.data?.getStringExtra("qr") ?: return@rememberLauncherForActivityResult
-                        // TODO: décoder le payload (id+nom par ex.) et créer/ouvrir le thread
-                        // ex rapide :
-                        val id = payload // à adapter
+                        val id = payload            // à adapter si besoin
                         val title = payload.take(24)
                         vm.createThread(id, title)
-                        context.startActivity(
+                        startActivity(
                             Intent(context, ChatActivity::class.java)
                                 .putExtra(ChatActivity.EXTRA_THREAD_ID, id)
                                 .putExtra("extra_title", title)
@@ -140,27 +130,35 @@ class ConversationsActivity : ComponentActivity() {
                     }
                 }
 
-
                 Scaffold(
-                    topBar = { TopAppBar(title = { Text("HarpoChat") }) },
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("HarpoChat") },
+                            actions = {
+                                IconButton(
+                                    onClick = {
+                                        startActivity(Intent(this@ConversationsActivity, PinSettingsActivity::class.java))
+                                    }
+                                ) {
+                                    Icon(Icons.Filled.Settings, contentDescription = "Paramètres")
+                                }
+                            }
+                        )
+                    },
                     floatingActionButton = {
                         FloatingActionButton(onClick = { showSheet = true }) {
-                            androidx.compose.material3.Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = "Ajouter"
-                            )
+                            Icon(imageVector = Icons.Filled.Add, contentDescription = "Ajouter")
                         }
                     }
                 ) { padding ->
-
-                    // ==== list of conversations ====
+                    // Liste des conversations
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(ConvColors.bg)
                             .padding(padding)
                     ) {
-                        items(items = threads, key = { it.id }) { t: ThreadEntity ->
+                        items(items = threads, key = { it.id }) { t ->
                             ConversationRow(t) {
                                 startActivity(
                                     Intent(this@ConversationsActivity, ChatActivity::class.java)
@@ -172,7 +170,7 @@ class ConversationsActivity : ComponentActivity() {
                         }
                     }
 
-                    // ==== bottom sheet (+) ====
+                    // Bottom sheet (+)
                     if (showSheet) {
                         ModalBottomSheet(
                             onDismissRequest = { showSheet = false },
@@ -184,6 +182,7 @@ class ConversationsActivity : ComponentActivity() {
                                 tint = ConvColors.iconDefault
                             ) {
                                 showSheet = false
+                                // Lance ton QrActivity (à adapter selon ton projet)
                                 qrLauncher.launch(Intent(context, QrActivity::class.java))
                             }
 
@@ -195,6 +194,7 @@ class ConversationsActivity : ComponentActivity() {
                                 tint = Color.White
                             ) {
                                 showSheet = false
+                                // Lance ton CodepairActivity (à adapter selon ton projet)
                                 startActivity(Intent(context, CodepairActivity::class.java))
                             }
 
@@ -211,13 +211,14 @@ class ConversationsActivity : ComponentActivity() {
                                 showCreateDialog = true
                             }
                              */
+
                             Spacer(Modifier.height(16.dp))
                         }
                     }
 
-                    // ==== create-thread dialog ====
+                    // Dialog création (si tu réactives la section ci-dessus)
                     if (showCreateDialog) {
-                        AlertDialog(
+                        M3AlertDialog(
                             onDismissRequest = { showCreateDialog = false },
                             title = { Text("Nouvelle conversation") },
                             text = {
@@ -244,9 +245,7 @@ class ConversationsActivity : ComponentActivity() {
                                 }) { Text("Créer") }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showCreateDialog = false }) {
-                                    Text("Annuler")
-                                }
+                                TextButton(onClick = { showCreateDialog = false }) { Text("Annuler") }
                             }
                         )
                     }
@@ -256,7 +255,9 @@ class ConversationsActivity : ComponentActivity() {
     }
 }
 
-/* ---------- UI bits ---------- */
+/* =========================
+ * UI bits
+ * ========================= */
 
 @Composable
 private fun ConversationRow(conv: ThreadEntity, onClick: () -> Unit) {
@@ -300,49 +301,17 @@ private fun SheetActionRow(
 ) {
     ListItem(
         headlineContent = { Text(text, color = ConvColors.textPrimary) },
-        leadingContent = {
-            androidx.compose.material3.Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint
-            )
-        },
+        leadingContent = { Icon(imageVector = icon, contentDescription = null, tint = tint) },
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 2.dp)
     )
 }
-/*
-fun maybeWarnDefaultPin(context: Context) {
-    val prefs = SecureStore.prefs(context)
 
-    val secret = prefs.getString(CalculatorActivity.KEY_SECRET_PIN, "") ?: ""
-    val duress = prefs.getString(CalculatorActivity.KEY_DURESS_PIN, "") ?: ""
-    val alreadyShown = prefs.getBoolean(KEY_PIN_WARNING_SHOWN, false)
-    val usingDefaults = (secret == DEFAULT_SECRET) || (duress == DEFAULT_DURESS)
-
-    val activity = context as? Activity ?: return
-    if (usingDefaults && !alreadyShown) {
-        AlertDialog.Builder(activity)
-            .setTitle("PIN par défaut détecté")
-            .setMessage(
-                "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
-                        "Par sécurité, changez-les maintenant."
-            )
-            .setCancelable(false)
-            .setPositiveButton("Changer maintenant") { _, _ ->
-                activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
-                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
-            }
-            .setNegativeButton("Plus tard") { _, _ ->
-                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
-            }
-            .show()
-    }
-}
-*/
-
+/* =========================
+ * Alerte “PIN par défaut”
+ * ========================= */
 
 fun maybeWarnDefaultPin(activity: Activity) {
     val prefs = SecureStore.prefs(activity)
@@ -357,7 +326,7 @@ fun maybeWarnDefaultPin(activity: Activity) {
     activity.runOnUiThread {
         if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
 
-        AlertDialog.Builder(activity)
+        AlertDialog.Builder(activity) // android.app.AlertDialog, pas AppCompat
             .setTitle("PIN par défaut détecté")
             .setMessage(
                 "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
