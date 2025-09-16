@@ -15,7 +15,6 @@
 ⠀⠀⠀⠀⠁⠇⠡⠩⡫⢿⣝⡻⡮⣒⢽⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ————————————————————————————————————
 */
-
 package com.example.harpochat.messaging
 
 import android.app.Activity
@@ -38,7 +37,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.material3.AlertDialog as M3AlertDialog // alias pour éviter le conflit avec android.app.AlertDialog
+import androidx.compose.material3.AlertDialog as M3AlertDialog // alias M3
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.harpochat.ChatActivity
 import com.example.harpochat.calculator.CalculatorActivity
@@ -54,13 +52,6 @@ import com.example.harpochat.data.ThreadEntity
 import com.example.harpochat.security.SecureStore
 import com.example.harpochat.settings.PinSettingsActivity
 import java.util.UUID
-
-/* =========================
- * Constantes
- * ========================= */
-private const val DEFAULT_SECRET = "527418"
-private const val DEFAULT_DURESS = "1234"
-private const val KEY_PIN_WARNING_SHOWN = "pin_warning_shown"
 
 /* =========================
  * Palette locale
@@ -93,7 +84,7 @@ class ConversationsActivity : ComponentActivity() {
         enableEdgeToEdge()
         actionBar?.hide()
 
-        // Alerte "PIN par défaut" si nécessaire
+        // Alerte "PIN par défaut" si nécessaire (revient tant que pas changé)
         maybeWarnDefaultPin(this)
 
         setContent {
@@ -117,7 +108,7 @@ class ConversationsActivity : ComponentActivity() {
                 val qrLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.StartActivityForResult()
                 ) { res ->
-                    if (res.resultCode == Activity.RESULT_OK) {
+                    if (res.resultCode == RESULT_OK) {
                         val payload = res.data?.getStringExtra("qr") ?: return@rememberLauncherForActivityResult
                         val id = payload            // à adapter si besoin
                         val title = payload.take(24)
@@ -313,21 +304,25 @@ private fun SheetActionRow(
  * Alerte “PIN par défaut”
  * ========================= */
 
+/**
+ * Affiche une alerte *à chaque ouverture* tant que l’utilisateur
+ * n’a pas changé au moins un PIN dans l’écran Paramètres.
+ * On s’appuie sur le flag CalculatorActivity.KEY_PINS_CHANGED,
+ * qui est mis à `true` dans PinSettingsActivity quand l’utilisateur
+ * enregistre de nouveaux codes.
+ */
 fun maybeWarnDefaultPin(activity: Activity) {
     val prefs = SecureStore.prefs(activity)
 
-    val secret = prefs.getString(CalculatorActivity.KEY_SECRET_PIN, "") ?: ""
-    val duress = prefs.getString(CalculatorActivity.KEY_DURESS_PIN, "") ?: ""
-    val alreadyShown = prefs.getBoolean(KEY_PIN_WARNING_SHOWN, false)
-    val usingDefaults = (secret == DEFAULT_SECRET) || (duress == DEFAULT_DURESS)
-
-    if (!usingDefaults || alreadyShown) return
+    // Si l’utilisateur a déjà changé au moins un PIN, on ne montre plus l’alerte
+    val pinsChanged = prefs.getBoolean(CalculatorActivity.KEY_PINS_CHANGED, false)
+    if (pinsChanged) return
 
     activity.runOnUiThread {
         if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
 
-        AlertDialog.Builder(activity) // android.app.AlertDialog, pas AppCompat
-            .setTitle("PIN par défaut détecté")
+        AlertDialog.Builder(activity) // pas AppCompat: évite le crash de thème
+            .setTitle("Renforcez votre sécurité")
             .setMessage(
                 "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
                         "Par sécurité, changez-les maintenant."
@@ -335,11 +330,9 @@ fun maybeWarnDefaultPin(activity: Activity) {
             .setCancelable(false)
             .setPositiveButton("Changer maintenant") { _, _ ->
                 activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
-                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
+                // Pas d’écriture de flag ici : la popup DOIT revenir tant que l'utilisateur n'a pas sauvegardé de nouveaux PIN.
             }
-            .setNegativeButton("Plus tard") { _, _ ->
-                prefs.edit { putBoolean(KEY_PIN_WARNING_SHOWN, true) }
-            }
+            .setNegativeButton("Plus tard", null)
             .show()
     }
 }

@@ -16,12 +16,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.example.harpochat.calculator.CalculatorActivity
+import com.example.harpochat.security.PinHasher
 import com.example.harpochat.security.SecureStore
 import kotlinx.coroutines.launch
 
@@ -31,11 +34,8 @@ class PinSettingsActivity : ComponentActivity() {
         actionBar?.hide()
         super.onCreate(savedInstanceState)
         setContent {
-            // Force un schéma sombre simple et fiable
             MaterialTheme(colorScheme = darkColorScheme()) {
-                PinSettingsRoot(
-                    onBack = { finish() }
-                )
+                PinSettingsRoot(onBack = { finish() })
             }
         }
     }
@@ -63,10 +63,11 @@ private fun PinSettingsRoot(onBack: () -> Unit) {
                     onClick = { /* déjà ici */ },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
-                // TODO: autres items de paramètres plus tard
             }
         }
     ) {
+        val snackbarHost = remember { SnackbarHostState() }
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -78,36 +79,40 @@ private fun PinSettingsRoot(onBack: () -> Unit) {
                     },
                     actions = {
                         IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Retour"
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                         }
                     }
                 )
             },
-            snackbarHost = { SnackbarHost(remember { SnackbarHostState() }) }
+            snackbarHost = { SnackbarHost(snackbarHost) }
         ) { padding ->
-            PinSettingsContent(Modifier.padding(padding))
+            PinSettingsContent(
+                modifier = Modifier.padding(padding),
+                snackbarHost = snackbarHost
+            )
         }
     }
 }
 
 @Composable
-private fun PinSettingsContent(modifier: Modifier = Modifier) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun PinSettingsContent(
+    modifier: Modifier = Modifier,
+    snackbarHost: SnackbarHostState
+) {
+    val context = LocalContext.current
     val prefs = remember { SecureStore.prefs(context) }
-    val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var secretPin by remember {
-        mutableStateOf(prefs.getString(CalculatorActivity.KEY_SECRET_PIN, "") ?: "")
-    }
-    var duressPin by remember {
-        mutableStateOf(prefs.getString(CalculatorActivity.KEY_DURESS_PIN, "") ?: "")
-    }
+    // Par sécurité on NE pré-remplit PAS depuis les prefs
+    var secretPin by remember { mutableStateOf("") }
+    var duressPin by remember { mutableStateOf("") }
     var showSecret by remember { mutableStateOf(false) }
     var showDuress by remember { mutableStateOf(false) }
+
+    // État d’info : est-ce que l’utilisateur a déjà changé au moins un PIN ?
+    val pinsChanged by remember {
+        mutableStateOf(prefs.getBoolean(CalculatorActivity.KEY_PINS_CHANGED, false))
+    }
 
     Column(
         modifier = modifier
@@ -116,20 +121,25 @@ private fun PinSettingsContent(modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Host pour les messages
-        SnackbarHost(hostState = snackbarHost)
-
         Text("Codes PIN", style = MaterialTheme.typography.titleLarge)
+
+        AssistChip(
+            onClick = {},
+            label = {
+                Text(
+                    if (pinsChanged) "PIN modifiés ✔︎"
+                    else "PIN par défaut en place ⚠︎"
+                )
+            }
+        )
 
         OutlinedTextField(
             value = secretPin,
             onValueChange = { if (it.length <= 12 && it.all(Char::isDigit)) secretPin = it },
             label = { Text("PIN de déverrouillage") },
-            placeholder = { Text("ex: 527418") },
+            placeholder = { Text("4 à 12 chiffres") },
             singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
                 IconButton(onClick = { showSecret = !showSecret }) {
@@ -146,11 +156,9 @@ private fun PinSettingsContent(modifier: Modifier = Modifier) {
             value = duressPin,
             onValueChange = { if (it.length <= 12 && it.all(Char::isDigit)) duressPin = it },
             label = { Text("PIN d’effacement (duress)") },
-            placeholder = { Text("ex: 1234") },
+            placeholder = { Text("4 à 12 chiffres") },
             singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             visualTransformation = if (showDuress) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
                 IconButton(onClick = { showDuress = !showDuress }) {
@@ -171,16 +179,38 @@ private fun PinSettingsContent(modifier: Modifier = Modifier) {
         ) {
             Button(
                 onClick = {
+                    // Validation
+                    val bothProvided = secretPin.isNotBlank() && duressPin.isNotBlank()
+                    val lengthsOk = secretPin.length in 4..12 && duressPin.length in 4..12
+                    val numeric = secretPin.all(Char::isDigit) && duressPin.all(Char::isDigit)
+                    val different = secretPin != duressPin
+
                     when {
-                        secretPin.isBlank() || duressPin.isBlank() ->
+                        !bothProvided ->
                             scope.launch { snackbarHost.showSnackbar("Les deux PIN sont requis") }
-                        secretPin == duressPin ->
-                            scope.launch { snackbarHost.showSnackbar("Les deux PIN ne doivent pas être identiques") }
+                        !numeric ->
+                            scope.launch { snackbarHost.showSnackbar("PIN numériques uniquement") }
+                        !lengthsOk ->
+                            scope.launch { snackbarHost.showSnackbar("PIN : 4 à 12 chiffres") }
+                        !different ->
+                            scope.launch { snackbarHost.showSnackbar("Les deux PIN doivent être différents") }
                         else -> {
+                            // Hash + sauvegarde
+                            val secretHash = PinHasher.hash(secretPin)
+                            val duressHash = PinHasher.hash(duressPin)
                             prefs.edit {
-                                putString(CalculatorActivity.KEY_SECRET_PIN, secretPin)
-                                putString(CalculatorActivity.KEY_DURESS_PIN, duressPin)
+                                putString(CalculatorActivity.KEY_SECRET_PIN_HASH, secretHash)
+                                putString(CalculatorActivity.KEY_DURESS_PIN_HASH, duressHash)
+                                // On supprime les anciennes clés en clair si elles existaient
+                                remove(CalculatorActivity.KEY_SECRET_PIN)
+                                remove(CalculatorActivity.KEY_DURESS_PIN)
+                                // L’utilisateur a changé au moins un PIN : utile pour masquer l’alerte
+                                putBoolean(CalculatorActivity.KEY_PINS_CHANGED, true)
                             }
+                            // Efface le champ en mémoire (hygiene)
+                            secretPin = ""
+                            duressPin = ""
+
                             scope.launch { snackbarHost.showSnackbar("PIN mis à jour") }
                         }
                     }
