@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.ui)
     implementation(libs.ui.graphics)
     implementation(libs.ui.tooling.preview)
+    implementation(libs.material)
     implementation(libs.material3)
     implementation(libs.material.icons.extended) // version via BOM
 
