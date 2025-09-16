@@ -52,6 +52,9 @@ import com.example.harpochat.data.ThreadEntity
 import com.example.harpochat.security.SecureStore
 import com.example.harpochat.settings.PinSettingsActivity
 import java.util.UUID
+import android.view.ContextThemeWrapper
+import com.example.harpochat.R   // ← add this import
+
 
 /* =========================
  * Palette locale
@@ -321,7 +324,7 @@ fun maybeWarnDefaultPin(activity: Activity) {
     activity.runOnUiThread {
         if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
 
-        AlertDialog.Builder(activity) // pas AppCompat: évite le crash de thème
+        AlertDialog.Builder(ContextThemeWrapper(activity, R.style.AlertDialogTheme)) // pas AppCompat: évite le crash de thème
             .setTitle("Renforcez votre sécurité")
             .setMessage(
                 "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
