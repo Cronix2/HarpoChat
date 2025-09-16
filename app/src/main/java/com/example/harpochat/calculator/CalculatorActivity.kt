@@ -56,13 +56,12 @@ import androidx.core.content.edit
 import com.example.harpochat.data.DbCrypto
 import com.example.harpochat.messaging.ConversationsActivity
 import com.example.harpochat.security.SecureStore
+import com.example.harpochat.security.PinHasher
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import com.example.harpochat.ui.CalculatorViewModel
 
 /* =========================
@@ -77,12 +76,15 @@ class CalculatorActivity : ComponentActivity() {
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
         actionBar?.hide()
-
         enableEdgeToEdge()
 
         val prefs = SecureStore.prefs(this)
-        if (!prefs.contains(KEY_SECRET_PIN)) prefs.edit { putString(KEY_SECRET_PIN, "527418") }
-        if (!prefs.contains(KEY_DURESS_PIN)) prefs.edit { putString(KEY_DURESS_PIN, "1234") }
+
+        // 1) Migration éventuelle depuis les clés "en clair" vers hachées
+        migratePinsIfNeeded(prefs)
+
+        // 2) Initialisation si premier lancement (aucune donnée existante)
+        ensureDefaultPinsIfEmpty(prefs)
 
         setContent {
             DarkCalcTheme {
@@ -103,29 +105,87 @@ class CalculatorActivity : ComponentActivity() {
                             Toast.makeText(this, "Memory cleared", Toast.LENGTH_SHORT).show()
                         },
                         validatePins = { entered ->
-                            val secret = prefs.getString(KEY_SECRET_PIN, "") ?: ""
-                            val duress = prefs.getString(KEY_DURESS_PIN, "") ?: ""
-                            when (entered) {
-                                secret -> PinResult.SECRET
-                                duress -> PinResult.DURESS
+                            val secretHash = prefs.getString(KEY_SECRET_PIN_HASH, "") ?: ""
+                            val duressHash = prefs.getString(KEY_DURESS_PIN_HASH, "") ?: ""
+                            when {
+                                PinHasher.verify(entered, secretHash) -> PinResult.SECRET
+                                PinHasher.verify(entered, duressHash) -> PinResult.DURESS
                                 else -> PinResult.NO_MATCH
                             }
                         }
                     )
-
                 }
             }
         }
     }
 
     companion object {
+        // Anciennes clés (stockage en clair) — utilisées pour migrer si présentes
         const val KEY_SECRET_PIN = "calculator_secret_pin"
         const val KEY_DURESS_PIN = "calculator_duress_pin"
+
+        // Nouvelles clés (stockage haché)
+        const val KEY_SECRET_PIN_HASH = "calculator_secret_pin_hash"
+        const val KEY_DURESS_PIN_HASH = "calculator_duress_pin_hash"
+
+        // Flag global pour l’app : passe à true quand l’utilisateur a changé au moins un PIN
+        const val KEY_PINS_CHANGED = "pins_changed"
+
+        // Valeurs par défaut (utilisées uniquement pour initialiser les hash au premier lancement)
+        const val DEFAULT_SECRET = "527418"
+        const val DEFAULT_DURESS = "1234"
     }
 }
 
 /* ====== État ====== */
 private enum class PinResult { SECRET, DURESS, NO_MATCH }
+
+/* ====== Migration & init ====== */
+
+private fun migratePinsIfNeeded(prefs: android.content.SharedPreferences) {
+    val oldSecret = prefs.getString(CalculatorActivity.KEY_SECRET_PIN, null)
+    val oldDuress = prefs.getString(CalculatorActivity.KEY_DURESS_PIN, null)
+    if (oldSecret == null && oldDuress == null) return
+
+    // Il y avait des valeurs en clair : on les migre vers les clés hachées
+    prefs.edit {
+        oldSecret?.let {
+            putString(CalculatorActivity.KEY_SECRET_PIN_HASH, PinHasher.hash(it))
+            remove(CalculatorActivity.KEY_SECRET_PIN)
+        }
+        oldDuress?.let {
+            putString(CalculatorActivity.KEY_DURESS_PIN_HASH, PinHasher.hash(it))
+            remove(CalculatorActivity.KEY_DURESS_PIN)
+        }
+        // Si au moins un des deux était différent des valeurs par défaut, on peut marquer "pins_changed"
+        val changed =
+            (oldSecret != null && oldSecret != CalculatorActivity.DEFAULT_SECRET) ||
+                    (oldDuress != null && oldDuress != CalculatorActivity.DEFAULT_DURESS)
+        if (changed) putBoolean(CalculatorActivity.KEY_PINS_CHANGED, true)
+    }
+}
+
+private fun ensureDefaultPinsIfEmpty(prefs: android.content.SharedPreferences) {
+    val hasSecret = prefs.contains(CalculatorActivity.KEY_SECRET_PIN_HASH)
+    val hasDuress = prefs.contains(CalculatorActivity.KEY_DURESS_PIN_HASH)
+    if (hasSecret && hasDuress) return
+
+    // Premier lancement : on initialise avec les PINs défaut **hachés**
+    prefs.edit {
+        if (!hasSecret) putString(
+            CalculatorActivity.KEY_SECRET_PIN_HASH,
+            PinHasher.hash(CalculatorActivity.DEFAULT_SECRET)
+        )
+        if (!hasDuress) putString(
+            CalculatorActivity.KEY_DURESS_PIN_HASH,
+            PinHasher.hash(CalculatorActivity.DEFAULT_DURESS)
+        )
+        // L’utilisateur n’a encore rien changé
+        if (!prefs.contains(CalculatorActivity.KEY_PINS_CHANGED)) {
+            putBoolean(CalculatorActivity.KEY_PINS_CHANGED, false)
+        }
+    }
+}
 
 /* ==============================
  *     Écran Calculatrice
@@ -133,7 +193,6 @@ private enum class PinResult { SECRET, DURESS, NO_MATCH }
 
 /** Ajoute des espaces fines insécables entre les milliers: 1234567.89 -> 1 234 567.89 */
 private fun groupThousands(num: String): String {
-    // on ne touche pas aux notations scientifiques
     if (num.contains('E') || num.contains('e')) return num
     val parts = num.split('.', limit = 2)
     val intPart = parts[0]
@@ -153,17 +212,14 @@ private fun groupThousands(num: String): String {
     return if (decPart != null) "$groupedInt.$decPart" else groupedInt
 }
 
-/** Remplace chaque nombre (\\d+(\\.\\d+)?) de l'expression par une version groupée */
 private fun prettifyExpression(expr: String): String {
     if (expr.isBlank()) return "0"
     val numberRegex = Regex("""\d+(?:\.\d+)?""")
     return numberRegex.replace(expr) { m -> groupThousands(m.value) }
 }
 
-/** Préparation du texte de preview (résultat) pour l’affichage */
 private fun prettifyResult(res: String): String {
     if (res.isBlank()) return res
-    // gère 1.23E9 -> on groupe seulement la partie mantisse AVANT 'E'
     return if (res.contains('E')) {
         val i = res.indexOf('E')
         groupThousands(res.substring(0, i)) + res.substring(i)
@@ -194,7 +250,7 @@ private fun CalculatorScreen(
     // Animation “just did equals”
     var justDidEquals by remember { mutableStateOf(false) }
 
-    // Pour la vérification PIN, on reprend uniquement les chiffres de l’expression
+    // PIN = uniquement les chiffres tapés
     fun digitsOnlyFromExpression(): String = expressionText.filter { it.isDigit() }
 
     Column(
@@ -204,7 +260,7 @@ private fun CalculatorScreen(
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        // Layout weights : ~5% top spacer, 25% display, 65% keyboard, ~5% bottom spacer
+        // Layout weights
         val weightDisplay = 0.25f
         val weightClavier = 0.65f
         val weightBas = 0.05f
@@ -222,7 +278,7 @@ private fun CalculatorScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.CenterEnd
         ) {
-            // Mesure de la largeur disponible (en px) SANS BoxWithConstraints
+            // Mesure de largeur dispo
             var maxWidthPx by remember { mutableFloatStateOf(0f) }
             val containerMod = Modifier
                 .fillMaxSize()
@@ -236,7 +292,7 @@ private fun CalculatorScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.End
             ) {
-                // -------- Expression (grouping + autosize synchrone + scroll si nécessaire) --------
+                // -------- Expression (autosize synchrone + scroll si besoin) --------
                 AnimatedContent(
                     targetState = expressionText,
                     transitionSpec = {
@@ -256,7 +312,7 @@ private fun CalculatorScreen(
                     val baseStyle = MaterialTheme.typography.headlineLarge
 
                     fun fits(fs: Float): Boolean {
-                        if (maxWidthPx <= 0f) return true // pas encore mesuré -> éviter un saut
+                        if (maxWidthPx <= 0f) return true
                         val layout = textMeasurer.measure(
                             text = AnnotatedString(pretty),
                             style = baseStyle.copy(fontSize = fs.sp),
@@ -265,7 +321,6 @@ private fun CalculatorScreen(
                         return layout.size.width <= maxWidthPx
                     }
 
-                    // Recherche binaire -> taille correcte AVANT affichage
                     var lo = minSp
                     var hi = maxSp
                     var chosen = minSp
@@ -296,7 +351,7 @@ private fun CalculatorScreen(
 
                 Spacer(Modifier.height(6.dp))
 
-                // -------- Preview (hauteur fixe = pas de "saut") --------
+                // -------- Preview (hauteur fixe) --------
                 val previewHeight = if (isLandscape) 44.dp else 52.dp
                 Box(
                     Modifier.fillMaxWidth().height(previewHeight),
@@ -333,8 +388,6 @@ private fun CalculatorScreen(
             }
         }
 
-
-
         Spacer(Modifier.weight(weightEspace))
 
         // ====== Clavier ======
@@ -345,7 +398,7 @@ private fun CalculatorScreen(
             verticalArrangement = Arrangement.spacedBy(KeyPadding)
         ) {
             if (!isLandscape) {
-                // Portrait : simple + "=" vertical
+                // Portrait
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
@@ -425,7 +478,7 @@ private fun CalculatorScreen(
                     )
                 }
             } else {
-                // ======== Scientifique paysage ========
+                // Paysage scientifique
                 Row(
                     Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
@@ -433,7 +486,6 @@ private fun CalculatorScreen(
                     FuncKey("(") { viewModel.addLeftParen() }
                     FuncKey(")") { viewModel.addRightParen() }
                     FuncKey("±") { viewModel.toggleSignOfLastNumber() }
-                    //FuncKey("1/x") { viewModel.reciprocalOfLastTerm() }
                     MemKey("MC", hasMemory) { viewModel.memoryClear() }
                     MemKey("M+", hasMemory) { viewModel.memoryAdd() }
                     MemKey("M-", hasMemory) { viewModel.memorySubtract() }
@@ -458,12 +510,10 @@ private fun CalculatorScreen(
                     FuncKey("x!") { viewModel.addFactorial() }
                     FuncKey("√") { viewModel.addFunction("sqrt") }
                     FuncKey("ʸ√X") {
-                        // y-th root of X == X^(1/y) -> on insère ^ puis (1/ … )
                         viewModel.addBinaryOp("^")
                         viewModel.addLeftParen()
                         viewModel.addDigit('1')
                         viewModel.addBinaryOp("÷")
-                        // l’utilisateur saisira y, puis on lui laisse fermer “)”
                     }
                     DigitKey("7") { viewModel.addDigit('7') }
                     DigitKey("8") { viewModel.addDigit('8') }
@@ -483,14 +533,12 @@ private fun CalculatorScreen(
                     OpKey("+") { viewModel.addBinaryOp("+") }
                 }
 
-                // ✅ Fusion des 2 dernières rangées : 6 cases à gauche, 1 case "=" à droite
                 Row(
                     Modifier.weight(2f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(KeyPadding)
                 ) {
-                    // 6 cases (2 rangées x 6 touches)
                     Column(
-                        modifier = Modifier.weight(6f).fillMaxHeight(), // <<--- 6f (au lieu de 3f)
+                        modifier = Modifier.weight(6f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(KeyPadding)
                     ) {
                         Row(
@@ -526,11 +574,10 @@ private fun CalculatorScreen(
                         }
                     }
 
-                    // "=" occupe 1 case (même largeur qu’une touche)
                     EqualKeyTall(
                         modifier = Modifier
-                            .weight(1f)                    // <<--- 1f (case unique)
-                            .fillMaxHeight(),              // sur 2 rangées
+                            .weight(1f)
+                            .fillMaxHeight(),
                         onTap = {
                             viewModel.evaluate()
                             justDidEquals = true
@@ -557,7 +604,6 @@ private fun CalculatorScreen(
         }
     }
 }
-
 
 /* =============== Composants de touches =============== */
 
@@ -609,13 +655,11 @@ private fun RowScope.MemKey(
         onClick = onClick
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            // Texte
             Text(
                 label,
                 style = MaterialTheme.typography.titleLarge,
                 color = MemTextBlue
             )
-            // Petit point en haut à droite si mémoire
             if (hasMemory) {
                 Box(
                     modifier = Modifier
@@ -629,8 +673,7 @@ private fun RowScope.MemKey(
     }
 }
 
-
-/** “=” vertical qui remplit toute la hauteur disponible (deux rangées) */
+/** “=” vertical (deux rangées) */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EqualKeyTall(
