@@ -11,6 +11,8 @@
     <color name="hc_dialog_bg_end">#232732</color>
     <color name="hc_dialog_border">#3C4657</color>
     <color name="hc_text_primary">#FFFFFFFF</color>
-    <color name="hc_text_secondary">#CDD3E1</color>
+    <color name="hc_text_secondary">#C6CFDD</color>
     <color name="hc_btn_primary">#4C6FFF</color>
+    <color name="hc_launcher_primary">#DC3D3D</color>
+    <color name="hc_launcher_secondary">#33FFFFFF</color>
 </resources>
