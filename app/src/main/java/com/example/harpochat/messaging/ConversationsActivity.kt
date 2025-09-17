@@ -17,8 +17,8 @@
 */
 package com.example.harpochat.messaging
 
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -52,8 +52,14 @@ import com.example.harpochat.data.ThreadEntity
 import com.example.harpochat.security.SecureStore
 import com.example.harpochat.settings.PinSettingsActivity
 import java.util.UUID
-import android.view.ContextThemeWrapper
-import com.example.harpochat.R   // ← add this import
+import android.app.Dialog
+import android.view.LayoutInflater
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import com.example.harpochat.R
+import androidx.core.graphics.drawable.toDrawable
 
 
 /* =========================
@@ -314,6 +320,7 @@ private fun SheetActionRow(
  * qui est mis à `true` dans PinSettingsActivity quand l’utilisateur
  * enregistre de nouveaux codes.
  */
+@SuppressLint("InflateParams", "SetTextI18n")
 fun maybeWarnDefaultPin(activity: Activity) {
     val prefs = SecureStore.prefs(activity)
 
@@ -321,21 +328,67 @@ fun maybeWarnDefaultPin(activity: Activity) {
     val pinsChanged = prefs.getBoolean(CalculatorActivity.KEY_PINS_CHANGED, false)
     if (pinsChanged) return
 
+    if (activity.isFinishing || activity.isDestroyed) return
+
     activity.runOnUiThread {
         if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
 
-        AlertDialog.Builder(ContextThemeWrapper(activity, R.style.AlertDialogTheme)) // pas AppCompat: évite le crash de thème
-            .setTitle("Renforcez votre sécurité")
-            .setMessage(
-                "Votre code de déverrouillage ou d’effacement est encore celui par défaut. " +
-                        "Par sécurité, changez-les maintenant."
-            )
-            .setCancelable(false)
-            .setPositiveButton("Changer maintenant") { _, _ ->
-                activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
-                // Pas d’écriture de flag ici : la popup DOIT revenir tant que l'utilisateur n'a pas sauvegardé de nouveaux PIN.
-            }
-            .setNegativeButton("Plus tard", null)
-            .show()
+        // 1) Dialog "pleinement custom"
+        val dialog = Dialog(activity)
+        dialog.setCancelable(false)
+
+        // 2) On gonfle TON layout
+        val view = LayoutInflater.from(activity)
+            .inflate(R.layout.dialog_default_pin, null, false)
+        dialog.setContentView(view)
+
+        // 3) On laisse le fond de la fenêtre transparent pour voir ton bg arrondi
+        dialog.window?.setBackgroundDrawable(android.graphics.Color.TRANSPARENT.toDrawable())
+
+        // 4) Optionnel : largeur confortable
+        dialog.window?.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT
+        )
+
+        // 🔥 Ajout de marges aux bords de l’écran
+        WindowManager.LayoutParams().apply {
+            copyFrom(dialog.window?.attributes)
+            width = WindowManager.LayoutParams.MATCH_PARENT
+            height = WindowManager.LayoutParams.WRAP_CONTENT
+            // marge horizontale (ici 48px de chaque côté → tu peux ajuster)
+            val margin = (activity.resources.displayMetrics.density * 20).toInt()
+            horizontalMargin = 0f
+            dialog.window?.decorView?.setPadding(margin, 0, margin, 0)
+        }
+
+        // 5) Brancher les vues du layout
+        val tvTitle   = view.findViewById<TextView>(R.id.tvTitle)
+        val tvMessage = view.findViewById<TextView>(R.id.tvMessage)
+        val btnPrimary   = view.findViewById<Button>(R.id.btnPrimary)
+        val btnSecondary = view.findViewById<Button>(R.id.btnSecondary)
+
+        // 6) Texte (ou garde ceux définis dans ton XML)
+        tvTitle.text = "Renforcez votre sécurité"
+        tvMessage.text = "Votre code de déverrouillage ou d’effacement est encore celui par défaut. Par sécurité, changez-les maintenant."
+
+        // 7) Appliquer tes drawables & couleurs de /res/drawable et /res/color
+        btnPrimary.background = ContextCompat.getDrawable(activity, R.drawable.dialog_btn_primary)
+        btnPrimary.setTextColor(ContextCompat.getColor(activity, R.color.dialog_btn_primary_text))
+
+        btnSecondary.background = ContextCompat.getDrawable(activity, R.drawable.dialog_btn_secondary)
+        btnSecondary.setTextColor(ContextCompat.getColor(activity, R.color.dialog_btn_secondary_text))
+
+        // 8) Actions
+        btnPrimary.setOnClickListener {
+            activity.startActivity(Intent(activity, PinSettingsActivity::class.java))
+            dialog.dismiss()
+        }
+        btnSecondary.setOnClickListener {
+            // Pas de flag "vu" : on re-affichera tant que les PIN sont par défaut
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 }
