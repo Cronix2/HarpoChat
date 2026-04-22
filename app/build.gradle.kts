@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.harpochat"
+    namespace = "app.harpochat"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.harpochat"
+        applicationId = "app.harpochat"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
