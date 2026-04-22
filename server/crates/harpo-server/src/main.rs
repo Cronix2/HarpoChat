@@ -19,8 +19,19 @@ async fn main() -> anyhow::Result<()> {
         .install_recorder()
         .expect("install prometheus recorder");
 
+    let mailbox: Arc<dyn harpo_server::mailbox::Mailbox> = match std::env::var("HARPO_DB").ok() {
+        Some(url) if !url.is_empty() => {
+            info!(%url, "opening sqlite mailbox");
+            Arc::new(harpo_server::mailbox::SqliteMailbox::connect(&url).await?)
+        }
+        _ => {
+            info!("using in-memory mailbox (set HARPO_DB for persistence)");
+            Arc::new(MemoryMailbox::new())
+        }
+    };
+
     let state = AppState {
-        mailbox: Arc::new(MemoryMailbox::new()),
+        mailbox,
         sessions: Arc::new(SessionRegistry::new()),
         metrics,
         server_version: SERVER_VERSION,
