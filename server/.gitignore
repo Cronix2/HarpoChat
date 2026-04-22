@@ -1,0 +1,7 @@
+/target
+**/*.rs.bk
+Cargo.lock
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal

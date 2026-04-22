@@ -1,0 +1,13 @@
+[package]
+name = "harpo-crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ed25519 challenge/response authentication helpers for HarpoChat."
+
+[dependencies]
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+thiserror = { workspace = true }
