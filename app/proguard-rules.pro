@@ -1,21 +1,86 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ============================================================================
+# HarpoChat ProGuard / R8 rules
+# SPDX-License-Identifier: MIT
+# ============================================================================
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep line numbers for readable crash reports, but rewrite source file name.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ---------------------------------------------------------------------------
+# Kotlin / Compose / AndroidX
+# ---------------------------------------------------------------------------
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Compose relies on reflection into @Stable/@Immutable etc.
+-dontwarn kotlin.reflect.jvm.internal.**
+
+# ---------------------------------------------------------------------------
+# Room (generated DAO/DB classes)
+# ---------------------------------------------------------------------------
+-keep class androidx.room.RoomDatabase { *; }
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keepclassmembers class * {
+    @androidx.room.* <methods>;
+}
+-dontwarn androidx.room.paging.**
+
+# ---------------------------------------------------------------------------
+# SQLCipher (net.zetetic) — reflection to load JNI symbols
+# ---------------------------------------------------------------------------
+-keep class net.sqlcipher.** { *; }
+-dontwarn net.sqlcipher.**
+
+# ---------------------------------------------------------------------------
+# Signal protocol (libsignal-client)
+# ---------------------------------------------------------------------------
+-keep class org.signal.** { *; }
+-keep class org.whispersystems.** { *; }
+-dontwarn org.signal.**
+-dontwarn org.whispersystems.**
+
+# ---------------------------------------------------------------------------
+# EdDSA (net.i2p.crypto:eddsa) — used by our invite signing
+# ---------------------------------------------------------------------------
+-keep class net.i2p.crypto.eddsa.** { *; }
+-dontwarn net.i2p.crypto.eddsa.**
+
+# ---------------------------------------------------------------------------
+# OkHttp / Okio (used by RelayWsTransport)
+# ---------------------------------------------------------------------------
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+
+# ---------------------------------------------------------------------------
+# ML Kit / CameraX
+# ---------------------------------------------------------------------------
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+
+# ---------------------------------------------------------------------------
+# ZXing
+# ---------------------------------------------------------------------------
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
+-keep class com.journeyapps.barcodescanner.** { *; }
+
+# ---------------------------------------------------------------------------
+# Application entry points (Activities, Services, Receivers)
+# ---------------------------------------------------------------------------
+-keep public class * extends android.app.Activity
+-keep public class * extends android.app.Application
+-keep public class * extends android.app.Service
+-keep public class * extends android.content.BroadcastReceiver
+-keep public class * extends android.content.ContentProvider
+
+# ---------------------------------------------------------------------------
+# Reflection safety nets for data classes accessed via JSON
+# ---------------------------------------------------------------------------
+-keepclassmembers class app.harpochat.link.Invite { *; }
+-keepclassmembers class app.harpochat.transport.** { *; }
