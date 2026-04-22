@@ -49,11 +49,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.harpochat.ChatActivity
 import app.harpochat.data.ChatRepository
-import app.harpochat.qr.QrInvite
-import app.harpochat.qr.decodeInvite
-import app.harpochat.qr.encodeInvite
-import app.harpochat.qr.isInviteExpired
-import app.harpochat.qr.makeInviteNow
+import app.harpochat.link.Invite
+import app.harpochat.link.InviteCodec
+import app.harpochat.link.InviteIdentity
 import app.harpochat.ui.theme.AppColors
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
@@ -66,6 +64,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+
+private const val DEFAULT_RELAY_URL = "wss://relay.harpochat.local/v1/ws"
 
 /* =========================================================
  * Activity
@@ -99,7 +99,7 @@ private fun QrScreen(onBack: () -> Unit) {
 
     // État scanneur / popup / info
     var paused by remember { mutableStateOf(false) }
-    var pendingInvite by remember { mutableStateOf<QrInvite?>(null) }
+    var pendingInvite by remember { mutableStateOf<Invite?>(null) }
     var infoMsg by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme(colorScheme = darkColorScheme()) {
@@ -138,13 +138,15 @@ private fun QrScreen(onBack: () -> Unit) {
                         modifier = Modifier.weight(1f),
                         paused = paused,
                         onDecoded = { raw ->
-                            val result = decodeInvite(raw)
+                            val result = InviteCodec.decode(raw)
                             result.onSuccess { inv ->
-                                if (isInviteExpired(inv)) {
-                                    infoMsg = "Ce QR code a expiré."
-                                } else {
-                                    paused = true
-                                    pendingInvite = inv
+                                when {
+                                    inv.isExpired() -> infoMsg = "Ce QR code a expiré."
+                                    !InviteCodec.verify(inv) -> infoMsg = "Signature QR invalide."
+                                    else -> {
+                                        paused = true
+                                        pendingInvite = inv
+                                    }
                                 }
                             }.onFailure {
                                 infoMsg = "QR invalide pour HarpoChat."
@@ -181,7 +183,7 @@ private fun QrScreen(onBack: () -> Unit) {
                         title = { Text("Demande de chat") },
                         text = {
                             Text(
-                                "Vous avez scanné un QR d’invitation de ${inv.fromUserName}.\n" +
+                                "Vous avez scanné un QR d’invitation de ${inv.displayName}.\n" +
                                         "Voulez-vous envoyer une demande de chat ?"
                             )
                         },
@@ -189,12 +191,12 @@ private fun QrScreen(onBack: () -> Unit) {
                             TextButton(onClick = {
                                 scope.launch {
                                     // MVP : on crée localement le fil et on ouvre la conversation
-                                    repo.ensureThread(inv.threadId, inv.fromUserName)
+                                    repo.ensureThread(inv.threadId, inv.displayName)
                                 }
                                 ctx.startActivity(
                                     Intent(ctx, ChatActivity::class.java)
                                         .putExtra(ChatActivity.EXTRA_THREAD_ID, inv.threadId)
-                                        .putExtra("extra_title", inv.fromUserName)
+                                        .putExtra("extra_title", inv.displayName)
                                 )
                                 pendingInvite = null
                                 paused = false
@@ -323,15 +325,21 @@ private fun QrGeneratorView(
     var cycleStartMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var secLeft by remember { mutableIntStateOf(periodSec) }
 
+    // Identité Ed25519 stable pour la session de génération.
+    // TODO: persist via SecureStore + Signal identity, wire transport on accept.
+    val identity = remember { InviteIdentity.generate() }
+
     // Génère le contenu du QR pour le cycle en cours
     fun regenNow() {
-        val invite = makeInviteNow(
-            fromUserId = meId,
-            fromUserName = meName,
+        val invite = InviteCodec.create(
+            identityPub = identity.publicKey,
+            identityPrivSeed = identity.privateSeed,
+            displayName = meName,
             threadId = threadId,
+            relayUrl = DEFAULT_RELAY_URL,
             ttlSec = periodSec.toLong()
         )
-        qrText = encodeInvite(invite)
+        qrText = InviteCodec.encode(invite)
     }
 
     // Une seule boucle pilote le timer + la régénération du QR

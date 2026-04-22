@@ -128,4 +128,10 @@ dependencies {
     // ---------- ZXing (génération QR) ----------
     implementation(libs.zxing.android.embedded)
     implementation(libs.core)
+
+    // ---------- Ed25519 (signatures d'invite, auth relais) ----------
+    implementation("net.i2p.crypto:eddsa:0.3.0")
+
+    // ---------- WebSocket client (transport vers le relais HarpoChat) ----------
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
