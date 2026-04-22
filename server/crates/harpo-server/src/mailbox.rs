@@ -39,7 +39,9 @@ pub struct MemoryMailbox {
 
 impl MemoryMailbox {
     pub fn new() -> Self {
-        Self { inner: Mutex::new(HashMap::new()) }
+        Self {
+            inner: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -100,11 +102,9 @@ impl SqliteMailbox {
             .await?;
         // Inline migration. Keeps us free of sqlx-cli tooling and avoids a
         // build-time DATABASE_URL dependency.
-        sqlx::query(include_str!(
-            "../migrations/0001_pending_envelopes.sql"
-        ))
-        .execute(&pool)
-        .await?;
+        sqlx::query(include_str!("../migrations/0001_pending_envelopes.sql"))
+            .execute(&pool)
+            .await?;
         Ok(Self { pool })
     }
 
@@ -169,13 +169,11 @@ impl Mailbox for SqliteMailbox {
     }
 
     async fn ack(&self, identity: &IdentityPubKey, id: Uuid) -> anyhow::Result<bool> {
-        let res = sqlx::query(
-            r#"DELETE FROM pending_envelopes WHERE id = ? AND to_identity = ?"#,
-        )
-        .bind(id.to_string())
-        .bind(identity.to_vec())
-        .execute(&self.pool)
-        .await?;
+        let res = sqlx::query(r#"DELETE FROM pending_envelopes WHERE id = ? AND to_identity = ?"#)
+            .bind(id.to_string())
+            .bind(identity.to_vec())
+            .execute(&self.pool)
+            .await?;
         Ok(res.rows_affected() > 0)
     }
 }
@@ -197,9 +195,12 @@ mod tests {
     #[tokio::test]
     async fn memory_push_and_drain() {
         let mb = MemoryMailbox::new();
-        mb.push(StoredMessage { id: Uuid::new_v4(), envelope: env([2u8; 32]) })
-            .await
-            .unwrap();
+        mb.push(StoredMessage {
+            id: Uuid::new_v4(),
+            envelope: env([2u8; 32]),
+        })
+        .await
+        .unwrap();
         let got = mb.drain_for(&[2u8; 32]).await.unwrap();
         assert_eq!(got.len(), 1);
         // Non-destructive: still there on re-drain.
@@ -215,15 +216,21 @@ mod tests {
     async fn sqlite_push_drain_ack() {
         let mb = SqliteMailbox::connect("sqlite::memory:").await.unwrap();
         let id = Uuid::new_v4();
-        mb.push(StoredMessage { id, envelope: env([3u8; 32]) })
-            .await
-            .unwrap();
+        mb.push(StoredMessage {
+            id,
+            envelope: env([3u8; 32]),
+        })
+        .await
+        .unwrap();
 
         // push a second message for the same recipient
         let id2 = Uuid::new_v4();
-        mb.push(StoredMessage { id: id2, envelope: env([3u8; 32]) })
-            .await
-            .unwrap();
+        mb.push(StoredMessage {
+            id: id2,
+            envelope: env([3u8; 32]),
+        })
+        .await
+        .unwrap();
 
         let drained = mb.drain_for(&[3u8; 32]).await.unwrap();
         assert_eq!(drained.len(), 2);

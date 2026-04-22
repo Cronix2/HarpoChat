@@ -18,7 +18,9 @@ pub struct SessionRegistry {
 
 impl SessionRegistry {
     pub fn new() -> Self {
-        Self { inner: DashMap::new() }
+        Self {
+            inner: DashMap::new(),
+        }
     }
 
     /// Register a session. Returns the previous session for this identity, if any
