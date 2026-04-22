@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT
+name: Server CI
+
+on:
+  push:
+    branches: [main, master, 'phase-*']
+    paths:
+      - 'server/**'
+      - '.github/workflows/server.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'server/**'
+      - '.github/workflows/server.yml'
+
+jobs:
+  rust:
+    name: cargo fmt + clippy + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('server/**/Cargo.lock', 'server/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --no-fail-fast

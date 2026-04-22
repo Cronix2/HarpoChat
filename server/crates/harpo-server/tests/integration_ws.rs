@@ -33,6 +33,10 @@ async fn spawn_server() -> (String, tokio::task::JoinHandle<()>) {
     let state = harpo_server::AppState {
         mailbox: Arc::new(harpo_server::mailbox::MemoryMailbox::new()),
         sessions: Arc::new(harpo_server::session::SessionRegistry::new()),
+        rate_limiter: Arc::new(harpo_server::rate_limit::RateLimiter::new(
+            std::time::Duration::from_secs(60),
+            10_000,
+        )),
         metrics: metrics_handle(),
         server_version: harpo_server::SERVER_VERSION,
     };
@@ -55,15 +59,23 @@ async fn spawn_server() -> (String, tokio::task::JoinHandle<()>) {
     (url, handle)
 }
 
-async fn connect_and_authenticate(url: &str, sk: &SigningKey) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
-    let (mut stream, _) = tokio_tungstenite::connect_async(url).await.expect("connect");
+async fn connect_and_authenticate(
+    url: &str,
+    sk: &SigningKey,
+) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
+    let (mut stream, _) = tokio_tungstenite::connect_async(url)
+        .await
+        .expect("connect");
 
     // 1. Hello
     let hello = ClientFrame::Hello {
         identity: sk.verifying_key().to_bytes(),
         version: harpo_server::SERVER_VERSION,
     };
-    stream.send(WsMessage::Text(serde_json::to_string(&hello).unwrap())).await.unwrap();
+    stream
+        .send(WsMessage::Text(serde_json::to_string(&hello).unwrap()))
+        .await
+        .unwrap();
 
     // 2. Read Challenge
     let msg = stream.next().await.unwrap().unwrap();
@@ -77,13 +89,20 @@ async fn connect_and_authenticate(url: &str, sk: &SigningKey) -> tokio_tungsteni
     // 3. AuthResponse
     let sig = sk.sign(&challenge_digest(&nonce)).to_bytes().to_vec();
     let resp = ClientFrame::AuthResponse { signature: sig };
-    stream.send(WsMessage::Text(serde_json::to_string(&resp).unwrap())).await.unwrap();
+    stream
+        .send(WsMessage::Text(serde_json::to_string(&resp).unwrap()))
+        .await
+        .unwrap();
 
     // 4. Read Welcome
     let msg = stream.next().await.unwrap().unwrap();
     let text = msg.into_text().unwrap();
     let sf: ServerFrame = serde_json::from_str(&text).unwrap();
-    assert!(matches!(sf, ServerFrame::Welcome { .. }), "expected welcome, got {:?}", sf);
+    assert!(
+        matches!(sf, ServerFrame::Welcome { .. }),
+        "expected welcome, got {:?}",
+        sf
+    );
 
     stream
 }
@@ -131,26 +150,22 @@ async fn full_handshake_and_relay() {
     while (!got_ack || !got_deliver) && tokio::time::Instant::now() < deadline {
         tokio::select! {
             msg = alice.next() => {
-                if let Some(Ok(m)) = msg {
-                    if let WsMessage::Text(t) = m {
-                        let sf: ServerFrame = serde_json::from_str(&t).unwrap();
-                        if let ServerFrame::SendAck { stored, .. } = sf {
-                            // Bob is online so it should be relayed (stored == false)
-                            assert!(!stored, "should have been relayed, not stored");
-                            got_ack = true;
-                        }
+                if let Some(Ok(WsMessage::Text(t))) = msg {
+                    let sf: ServerFrame = serde_json::from_str(&t).unwrap();
+                    if let ServerFrame::SendAck { stored, .. } = sf {
+                        // Bob is online so it should be relayed (stored == false)
+                        assert!(!stored, "should have been relayed, not stored");
+                        got_ack = true;
                     }
                 }
             }
             msg = bob.next() => {
-                if let Some(Ok(m)) = msg {
-                    if let WsMessage::Text(t) = m {
-                        let sf: ServerFrame = serde_json::from_str(&t).unwrap();
-                        if let ServerFrame::Deliver { envelope, .. } = sf {
-                            assert_eq!(envelope.ciphertext, ciphertext);
-                            assert_eq!(envelope.from, from);
-                            got_deliver = true;
-                        }
+                if let Some(Ok(WsMessage::Text(t))) = msg {
+                    let sf: ServerFrame = serde_json::from_str(&t).unwrap();
+                    if let ServerFrame::Deliver { envelope, .. } = sf {
+                        assert_eq!(envelope.ciphertext, ciphertext);
+                        assert_eq!(envelope.from, from);
+                        got_deliver = true;
                     }
                 }
             }
@@ -199,7 +214,8 @@ async fn offline_recipient_gets_queued_message() {
     while tokio::time::Instant::now() < deadline {
         let msg = tokio::time::timeout(Duration::from_millis(200), alice.next()).await;
         if let Ok(Some(Ok(WsMessage::Text(t)))) = msg {
-            if let Ok(ServerFrame::SendAck { stored, .. }) = serde_json::from_str::<ServerFrame>(&t) {
+            if let Ok(ServerFrame::SendAck { stored, .. }) = serde_json::from_str::<ServerFrame>(&t)
+            {
                 assert!(stored, "expected stored=true for offline peer");
                 saw_stored_ack = true;
                 break;
@@ -215,7 +231,9 @@ async fn offline_recipient_gets_queued_message() {
     while tokio::time::Instant::now() < deadline {
         let msg = tokio::time::timeout(Duration::from_millis(200), bob.next()).await;
         if let Ok(Some(Ok(WsMessage::Text(t)))) = msg {
-            if let Ok(ServerFrame::Deliver { envelope, .. }) = serde_json::from_str::<ServerFrame>(&t) {
+            if let Ok(ServerFrame::Deliver { envelope, .. }) =
+                serde_json::from_str::<ServerFrame>(&t)
+            {
                 assert_eq!(envelope.ciphertext, ciphertext);
                 got_it = true;
                 break;
@@ -235,7 +253,10 @@ async fn auth_with_bad_signature_is_rejected() {
         identity: sk.verifying_key().to_bytes(),
         version: harpo_server::SERVER_VERSION,
     };
-    stream.send(WsMessage::Text(serde_json::to_string(&hello).unwrap())).await.unwrap();
+    stream
+        .send(WsMessage::Text(serde_json::to_string(&hello).unwrap()))
+        .await
+        .unwrap();
 
     let msg = stream.next().await.unwrap().unwrap().into_text().unwrap();
     let _sf: ServerFrame = serde_json::from_str(&msg).unwrap();
@@ -244,7 +265,10 @@ async fn auth_with_bad_signature_is_rejected() {
     let resp = ClientFrame::AuthResponse {
         signature: vec![0xDEu8; 64],
     };
-    stream.send(WsMessage::Text(serde_json::to_string(&resp).unwrap())).await.unwrap();
+    stream
+        .send(WsMessage::Text(serde_json::to_string(&resp).unwrap()))
+        .await
+        .unwrap();
 
     let msg = stream.next().await.unwrap().unwrap().into_text().unwrap();
     let sf: ServerFrame = serde_json::from_str(&msg).unwrap();

@@ -60,19 +60,13 @@ pub enum ClientFrame {
 
     /// Send an encrypted envelope to a peer. Server stores it until the peer
     /// comes online, then relays it.
-    Send {
-        envelope: Envelope,
-    },
+    Send { envelope: Envelope },
 
     /// Acknowledge receipt of an envelope (lets the server drop it from the mailbox).
-    Ack {
-        message_id: uuid::Uuid,
-    },
+    Ack { message_id: uuid::Uuid },
 
     /// Application-level heartbeat (WebSocket pings are also supported).
-    Ping {
-        ts_ms: i64,
-    },
+    Ping { ts_ms: i64 },
 }
 
 /// Server → Client frames.
@@ -88,15 +82,10 @@ pub enum ServerFrame {
     },
 
     /// Authentication succeeded.
-    Welcome {
-        session_id: uuid::Uuid,
-    },
+    Welcome { session_id: uuid::Uuid },
 
     /// Authentication failed / frame rejected.
-    Error {
-        code: ErrorCode,
-        message: String,
-    },
+    Error { code: ErrorCode, message: String },
 
     /// Server delivers an envelope previously queued for this identity.
     Deliver {
@@ -119,9 +108,7 @@ pub enum ServerFrame {
     },
 
     /// Response to application Ping.
-    Pong {
-        ts_ms: i64,
-    },
+    Pong { ts_ms: i64 },
 }
 
 /// An opaque encrypted message destined for a peer. The server never decrypts
@@ -174,9 +161,8 @@ mod b64_array {
         let v = base64::engine::general_purpose::STANDARD
             .decode(s.as_bytes())
             .map_err(serde::de::Error::custom)?;
-        v.try_into().map_err(|_| {
-            serde::de::Error::custom(format!("expected {N} bytes, got wrong length"))
-        })
+        v.try_into()
+            .map_err(|_| serde::de::Error::custom(format!("expected {N} bytes, got wrong length")))
     }
 }
 

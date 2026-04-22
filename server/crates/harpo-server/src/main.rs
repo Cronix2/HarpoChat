@@ -5,8 +5,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use harpo_server::mailbox::MemoryMailbox;
+use harpo_server::rate_limit::RateLimiter;
 use harpo_server::session::SessionRegistry;
-use harpo_server::{build_router, AppState, SERVER_VERSION};
+use harpo_server::{
+    build_router, AppState, DEFAULT_RATE_LIMIT, DEFAULT_RATE_WINDOW, SERVER_VERSION,
+};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -33,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         mailbox,
         sessions: Arc::new(SessionRegistry::new()),
+        rate_limiter: Arc::new(RateLimiter::new(DEFAULT_RATE_WINDOW, DEFAULT_RATE_LIMIT)),
         metrics,
         server_version: SERVER_VERSION,
     };
@@ -45,7 +49,11 @@ async fn main() -> anyhow::Result<()> {
     info!(%addr, "harpo-server listening");
 
     let app = build_router(state);
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

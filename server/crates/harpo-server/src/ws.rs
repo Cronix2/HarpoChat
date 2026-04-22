@@ -107,43 +107,67 @@ async fn run_auth(socket: &mut WebSocket, state: &AppState) -> Option<IdentityPu
     // Expect Hello first.
     let hello_txt = read_text(socket).await?;
     let Ok(ClientFrame::Hello { identity, version }) = serde_json::from_str(&hello_txt) else {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::BadFrame,
-            message: "expected hello frame first".to_string(),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::BadFrame,
+                message: "expected hello frame first".to_string(),
+            },
+        )
+        .await;
         return None;
     };
     if version != state.server_version {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::BadFrame,
-            message: format!("unsupported client version {version}"),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::BadFrame,
+                message: format!("unsupported client version {version}"),
+            },
+        )
+        .await;
         return None;
     }
 
     // Send Challenge.
     let nonce = new_nonce();
-    if send(socket, &ServerFrame::Challenge {
-        nonce: nonce.to_vec(),
-        server_version: state.server_version,
-    }).await.is_err() { return None; }
+    if send(
+        socket,
+        &ServerFrame::Challenge {
+            nonce: nonce.to_vec(),
+            server_version: state.server_version,
+        },
+    )
+    .await
+    .is_err()
+    {
+        return None;
+    }
 
     // Expect AuthResponse.
     let resp_txt = read_text(socket).await?;
     let Ok(ClientFrame::AuthResponse { signature }) = serde_json::from_str(&resp_txt) else {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::BadFrame,
-            message: "expected auth_response".to_string(),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::BadFrame,
+                message: "expected auth_response".to_string(),
+            },
+        )
+        .await;
         return None;
     };
 
     if let Err(e) = verify_challenge(&identity, &nonce, &signature) {
         warn!(?e, "auth failed");
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::AuthFailed,
-            message: "signature does not verify".to_string(),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::AuthFailed,
+                message: "signature does not verify".to_string(),
+            },
+        )
+        .await;
         return None;
     }
 
@@ -172,7 +196,14 @@ async fn flush_pending(socket: &mut WebSocket, state: &AppState, identity: &Iden
     match state.mailbox.drain_for(identity).await {
         Ok(pending) => {
             for StoredMessage { id, envelope } in pending {
-                let _ = send(socket, &ServerFrame::Deliver { message_id: id, envelope }).await;
+                let _ = send(
+                    socket,
+                    &ServerFrame::Deliver {
+                        message_id: id,
+                        envelope,
+                    },
+                )
+                .await;
             }
         }
         Err(e) => warn!(?e, "drain failed"),
@@ -188,20 +219,28 @@ async fn handle_client_frame(
     let frame: ClientFrame = match serde_json::from_str(text) {
         Ok(f) => f,
         Err(e) => {
-            let _ = send(socket, &ServerFrame::Error {
-                code: ErrorCode::BadFrame,
-                message: format!("invalid json: {e}"),
-            }).await;
+            let _ = send(
+                socket,
+                &ServerFrame::Error {
+                    code: ErrorCode::BadFrame,
+                    message: format!("invalid json: {e}"),
+                },
+            )
+            .await;
             return true;
         }
     };
 
     match frame {
         ClientFrame::Hello { .. } | ClientFrame::AuthResponse { .. } => {
-            let _ = send(socket, &ServerFrame::Error {
-                code: ErrorCode::BadFrame,
-                message: "already authenticated".to_string(),
-            }).await;
+            let _ = send(
+                socket,
+                &ServerFrame::Error {
+                    code: ErrorCode::BadFrame,
+                    message: "already authenticated".to_string(),
+                },
+            )
+            .await;
         }
         ClientFrame::Ping { ts_ms } => {
             let _ = send(socket, &ServerFrame::Pong { ts_ms }).await;
@@ -214,10 +253,14 @@ async fn handle_client_frame(
         }
         ClientFrame::PublishPreKeys { .. } | ClientFrame::FetchPreKeys { .. } => {
             // MVP: PreKey publication is not yet implemented on the server side.
-            let _ = send(socket, &ServerFrame::Error {
-                code: ErrorCode::Internal,
-                message: "prekey routes not yet implemented".to_string(),
-            }).await;
+            let _ = send(
+                socket,
+                &ServerFrame::Error {
+                    code: ErrorCode::Internal,
+                    message: "prekey routes not yet implemented".to_string(),
+                },
+            )
+            .await;
         }
     }
     true
@@ -230,17 +273,37 @@ async fn handle_send(
     envelope: Envelope,
 ) {
     if envelope.from != *sender {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::AuthFailed,
-            message: "envelope `from` does not match authenticated identity".to_string(),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::AuthFailed,
+                message: "envelope `from` does not match authenticated identity".to_string(),
+            },
+        )
+        .await;
         return;
     }
     if envelope.ciphertext.len() > MAX_CIPHERTEXT_BYTES {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::PayloadTooLarge,
-            message: format!("ciphertext exceeds {MAX_CIPHERTEXT_BYTES} bytes"),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::PayloadTooLarge,
+                message: format!("ciphertext exceeds {MAX_CIPHERTEXT_BYTES} bytes"),
+            },
+        )
+        .await;
+        return;
+    }
+    if !state.rate_limiter.check(sender) {
+        metrics::counter!("harpo_rate_limit_hits_total").increment(1);
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::RateLimited,
+                message: "per-identity send rate limit exceeded".to_string(),
+            },
+        )
+        .await;
         return;
     }
     if let Err(e) = verify_envelope(
@@ -250,23 +313,32 @@ async fn handle_send(
         &envelope.ciphertext,
         &envelope.signature,
     ) {
-        let _ = send(socket, &ServerFrame::Error {
-            code: ErrorCode::AuthFailed,
-            message: format!("envelope signature invalid: {e}"),
-        }).await;
+        let _ = send(
+            socket,
+            &ServerFrame::Error {
+                code: ErrorCode::AuthFailed,
+                message: format!("envelope signature invalid: {e}"),
+            },
+        )
+        .await;
         return;
     }
 
-    let msg = StoredMessage { id: Uuid::new_v4(), envelope: envelope.clone() };
+    let msg = StoredMessage {
+        id: Uuid::new_v4(),
+        envelope: envelope.clone(),
+    };
 
     // If recipient is online, relay immediately (still also drop in mailbox for
     // at-least-once semantics; the recipient Acks to drop).
     let stored;
     if let Some(tx) = state.sessions.tx_for(&envelope.to) {
-        let _ = tx.send(ServerFrame::Deliver {
-            message_id: msg.id,
-            envelope: msg.envelope.clone(),
-        }).await;
+        let _ = tx
+            .send(ServerFrame::Deliver {
+                message_id: msg.id,
+                envelope: msg.envelope.clone(),
+            })
+            .await;
         stored = false;
         metrics::counter!("harpo_envelopes_relayed_total").increment(1);
     } else {
@@ -275,7 +347,14 @@ async fn handle_send(
         metrics::counter!("harpo_envelopes_stored_total").increment(1);
     }
 
-    let _ = send(socket, &ServerFrame::SendAck { message_id: msg.id, stored }).await;
+    let _ = send(
+        socket,
+        &ServerFrame::SendAck {
+            message_id: msg.id,
+            stored,
+        },
+    )
+    .await;
 }
 
 // hex only used for logs; avoid pulling full hex crate by implementing a small encode.
