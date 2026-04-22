@@ -29,6 +29,7 @@ Variables d'environnement :
 | Variable | Défaut | Description |
 |---|---|---|
 | `HARPO_BIND` | `0.0.0.0:8443` | Adresse d'écoute HTTP/WebSocket |
+| `HARPO_DB` | _(vide)_ | URL SQLite pour mailbox persistante (ex: `sqlite://harpo.db?mode=rwc`). Si vide, mailbox en mémoire. |
 | `RUST_LOG` | `info,harpo_server=debug` | Filtre de logs |
 
 ## Endpoints
@@ -54,7 +55,7 @@ cargo test
 
 ## Prochaines étapes (roadmap serveur)
 
-- [ ] `SqliteMailbox` persistant + migrations SQLx
+- [x] `SqliteMailbox` persistant + migrations SQLx
 - [ ] Publication/récupération de PreKey bundles
 - [ ] Rate limiting par identité (tower-governor)
 - [ ] TLS natif (rustls) + certificats Let's Encrypt
