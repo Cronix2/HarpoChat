@@ -10,12 +10,26 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.harpochat"
+        // Neutral id: what Settings > Apps and adb show. Never "harpochat".
+        applicationId = "app.calc.scientific"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Signature de release fournie par la CI (secrets GitHub) : jamais de clé dans le dépôt.
+    val releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -26,41 +40,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
-            )
-        }
-    }
-
-    // ✅ AGP 8+
-    packaging {
-        resources {
-            // Conflits ML Kit (une seule occurrence des modèles)
-            pickFirsts += listOf(
-                "assets/mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
-                "assets/mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
-                "assets/mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
-                "mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
-                "mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
-                "mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
-                "**/mlkit_barcode_models/*.tflite"
-            )
-        }
-    }
-
-    // ✅ Compat AGP 7.x si nécessaire (peut être supprimé si tu es sûr d'être en 8+)
-    @Suppress("DEPRECATION")
-    packagingOptions {
-        resources {
-            pickFirsts += setOf(
-                "assets/mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
-                "assets/mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
-                "assets/mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
-                "mlkit_barcode_models/barcode_ssd_mobilenet_v1_dmp25_quant.tflite",
-                "mlkit_barcode_models/oned_feature_extractor_mobile.tflite",
-                "mlkit_barcode_models/oned_auto_regressor_mobile.tflite",
-                "**/mlkit_barcode_models/*.tflite"
             )
         }
     }
@@ -71,72 +54,54 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {
     // ---------- Compose ----------
     implementation(platform(libs.androidx.compose.bom.v20250801))
-
     implementation(libs.androidx.core.ktx.v1170)
     implementation(libs.androidx.lifecycle.runtime.ktx.v293)
     implementation(libs.androidx.activity.compose.v1101)
-
     implementation(libs.androidx.compose.ui.ui)
     implementation(libs.ui.graphics)
     implementation(libs.ui.tooling.preview)
-    implementation(libs.material)
     implementation(libs.material3)
-    implementation(libs.material.icons.extended) // version via BOM
-
+    implementation(libs.material.icons.extended)
     debugImplementation(libs.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.ui.test.manifest)
-    androidTestImplementation(platform(libs.androidx.compose.bom.v20250801))
-    androidTestImplementation(libs.ui.test.junit4)
 
-    // ---------- Tests ----------
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit.v130)
-    androidTestImplementation(libs.androidx.espresso.core.v370)
-
-    // ---------- Architecture / Coroutines ----------
+    // ---------- Architecture ----------
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
 
-    // ---------- Sécurité ----------
-    implementation(libs.androidx.security.crypto.ktx)
-
-    // ---------- Protocole Signal ----------
-    implementation(libs.signal.protocol.java)
-
-    // ---------- Room (KSP, pas kapt) ----------
+    // ---------- Stockage chiffré : Room + SQLCipher (16 KB pages) ----------
     val roomVersion = "2.7.2"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
-
-    // ---------- SQLCipher (pour SupportFactory dans AppDatabase) ----------
-
-    implementation(libs.android.database.sqlcipher)
+    implementation(libs.sqlcipher.android)
     implementation(libs.androidx.sqlite.ktx)
 
-    // ---------- ML Kit Barcode ----------
-    implementation(libs.barcode.scanning)
-
-    // ---------- CameraX ----------
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
-
-    // ---------- ZXing (génération QR) ----------
-    implementation(libs.zxing.android.embedded)
+    // ---------- QR : scan via Google Code Scanner (aucune permission CAMERA) ----------
+    implementation(libs.play.services.code.scanner)
+    // Génération de QR : ZXing core seul (zxing-android-embedded déclarait CAMERA)
     implementation(libs.core)
 
-    // ---------- Ed25519 (signatures d'invite, auth relais) ----------
+    // ---------- Ed25519 (format d'invitation transitoire, remplacé par harpochat-core) ----------
     implementation("net.i2p.crypto:eddsa:0.3.0")
 
-    // ---------- WebSocket client (transport vers le relais HarpoChat) ----------
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // ---------- Tests ----------
+    testImplementation(libs.junit)
+    testImplementation(libs.json)
+    androidTestImplementation(platform(libs.androidx.compose.bom.v20250801))
+    androidTestImplementation(libs.ui.test.junit4)
+    androidTestImplementation(libs.androidx.junit.v130)
+    androidTestImplementation(libs.androidx.espresso.core.v370)
 }

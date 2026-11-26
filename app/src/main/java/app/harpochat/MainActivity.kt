@@ -8,63 +8,93 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.core.view.WindowCompat
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import app.harpochat.ui.ChatScreen
-import app.harpochat.ui.ChatViewModel
+import app.harpochat.calculator.CalculatorScreen
+import app.harpochat.calculator.CalculatorViewModel
+import app.harpochat.navigation.PrivateNavHost
+import app.harpochat.security.AppLock
+import app.harpochat.security.AttemptOutcome
+import app.harpochat.security.LockState
+import app.harpochat.setup.SetupScreen
+import app.harpochat.ui.SecureWindow
+import app.harpochat.ui.theme.HarpoTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+/**
+ * Activité unique. Ce qui s'affiche dépend UNIQUEMENT de l'état de [AppLock] :
+ * configuration → calculatrice (verrouillée) → espace privé (déverrouillé).
+ */
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
 
-        // Edge-to-edge (garde ce que tu avais)
+    override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
-        WindowCompat.setDecorFitsSystemWindows(window, true)
-        val insets = WindowCompat.getInsetsController(window, window.decorView)
-        insets.isAppearanceLightStatusBars = true
-        insets.isAppearanceLightNavigationBars = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            window.statusBarColor = Color.TRANSPARENT
-            window.navigationBarColor = Color.TRANSPARENT
-        }
+        super.onCreate(savedInstanceState)
+        // Jamais de miniature dans les apps récentes (ni de la calculatrice, ni du reste).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
 
-        // Empêche les captures d’écran (garde si tu veux)
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
-        )
-
+        val appLock = (application as HarpoApp).appLock
         setContent {
-            MaterialTheme {
-                Surface {
-                    val vm: ChatViewModel = viewModel()
-
-                    // Ouvre un fil par défaut au premier rendu
-                    LaunchedEffect(Unit) {
-                        vm.openThread(id = "thread-default", title = "Alice")
-                    }
-
-                    val messages by vm.messages.collectAsState(initial = emptyList())
-
-                    ChatScreen(
-                        messages   = messages,
-                        onSend     = vm::send,
-                        // onRetry peut relancer l’ouverture du fil (ou une synchro plus tard)
-                        onRetry    = { vm.openThread(id = "thread-default", title = "Alice") },
-                        title      = "Alice",
-                        avatarInitial = "A"
-                        // pas de onBack ici (c’est l’écran d’accueil/appli)
-                    )
+            HarpoTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    AppRoot(appLock)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AppRoot(appLock: AppLock) {
+    val state by appLock.state.collectAsStateWithLifecycle()
+    // Captures bloquées partout sauf sur la façade (une calculatrice qui interdit les captures intrigue).
+    SecureWindow(enabled = state !is LockState.Locked)
+
+    Crossfade(targetState = state, animationSpec = tween(220), label = "lock-state") { s ->
+        when (s) {
+            LockState.NeedsSetup -> SetupScreen(onConfigure = appLock::setup)
+            LockState.Locked -> LockedCalculator(appLock)
+            is LockState.Unlocked -> PrivateNavHost(s.session, appLock)
+        }
+    }
+}
+
+@Composable
+private fun LockedCalculator(appLock: AppLock) {
+    val vm: CalculatorViewModel = viewModel()
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    CalculatorScreen(
+        viewModel = vm,
+        onLongEquals = { digits ->
+            scope.launch {
+                when (appLock.attempt(digits)) {
+                    AttemptOutcome.UNLOCKED -> vm.clearAll()
+                    AttemptOutcome.WIPED -> {
+                        // Confirmation discrète : écran remis à zéro + double vibration brève.
+                        vm.clearAll()
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        delay(140)
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                    AttemptOutcome.NO_MATCH -> Unit // comportement de calculatrice ordinaire
+                }
+            }
+        }
+    )
 }

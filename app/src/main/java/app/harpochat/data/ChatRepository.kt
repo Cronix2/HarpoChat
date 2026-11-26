@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 package app.harpochat.data
 
-import android.content.Context
 import app.harpochat.ui.ChatMsg
 import app.harpochat.ui.MessageStatus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,121 +11,80 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /**
- * Repository persistant (Room + SQLCipher) avec un petit simulateur réseau.
- * - messages(threadId): Flow<List<ChatMsg>>
- * - sendLocal(threadId, text): insère en SENDING, simule ACK → SENT, puis faux incoming DELIVERED
- * - addIncoming(threadId, text): insère un message côté "other"
- * - updateStatus / markRead : maj de statut
+ * Accès aux conversations, sur la base ouverte de la session courante.
+ *
+ * Le réseau n'existe pas encore côté Android (il viendra avec `harpochat-core`) :
+ * [sendLocal] simule l'accusé de réception et une réponse, pour la démonstration.
  */
-class ChatRepository private constructor(
+class ChatRepository(
     private val db: AppDatabase,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope: CoroutineScope
 ) {
+    private val threads = db.threadDao()
+    private val messages = db.messageDao()
+    private val kv = db.kvDao()
 
-    private val msgDao = db.messageDao()
-    private val threadDao = db.threadDao()
+    fun summaries(): Flow<List<ThreadSummary>> = threads.summariesFlow()
 
-    /* ---------- Mapping Room -> UI ---------- */
+    fun thread(id: String): Flow<ThreadEntity?> = threads.threadFlow(id)
 
     fun messages(threadId: String): Flow<List<ChatMsg>> =
-        msgDao.messagesFlow(threadId).map { list ->
-            list.map { it.toUi() }
-        }
+        messages.messagesFlow(threadId).map { list -> list.map { it.toUi() } }
 
-    private fun MessageEntity.toUi(): ChatMsg =
-        ChatMsg(
-            id = id,
-            text = body,
-            time = time,
-            isMine = sender == "me",
-            status = when (status) {
-                0 -> MessageStatus.SENDING
-                1 -> MessageStatus.SENT
-                2 -> MessageStatus.DELIVERED
-                3 -> MessageStatus.READ
-                else -> MessageStatus.SENT
-            }
-        )
+    suspend fun createThread(id: String, title: String) =
+        threads.insertIfAbsent(ThreadEntity(id = id, title = title))
 
-    private fun MessageStatus.toDb(): Int = when (this) {
-        MessageStatus.SENDING   -> 0
-        MessageStatus.SENT      -> 1
-        MessageStatus.DELIVERED -> 2
-        MessageStatus.READ      -> 3
-    }
+    suspend fun renameThread(id: String, title: String) = threads.rename(id, title)
 
-    /* ---------- Threads ---------- */
-
-    // Expose la liste des fils pour la liste de conversations
-    fun threads() = threadDao.threadsFlow()
-
-    // Alias pratique si tu veux un nom plus parlant côté VM
-    suspend fun createThread(id: String, title: String) = ensureThread(id, title)
-
-    suspend fun ensureThread(id: String, title: String) {
-        threadDao.upsert(ThreadEntity(id, title))
-    }
-
-    /* ---------- Envoi local + simulateur ---------- */
+    suspend fun markThreadRead(threadId: String) = messages.markThreadRead(threadId)
 
     suspend fun sendLocal(threadId: String, text: String) {
-        if (text.isBlank()) return
-
-        val now = System.currentTimeMillis()
-        val localId = UUID.randomUUID().toString()
-
-        val outgoing = MessageEntity(
-            id = localId,
-            threadId = threadId,
-            sender = "me",
-            body = text.trim(),
-            time = now,
-            status = MessageStatus.SENDING.toDb()
+        val body = text.trim()
+        if (body.isEmpty()) return
+        val id = UUID.randomUUID().toString()
+        messages.insert(
+            MessageEntity(id, threadId, SENDER_ME, body, System.currentTimeMillis(), MessageStatus.SENDING.code)
         )
-
-        // 1) on écrit en base en SENDING
-        msgDao.insert(outgoing)
-
-        // 2) simulateur: ACK réseau → SENT
+        // --- Simulateur de démonstration (remplacé par le transport réel) ---
         scope.launch {
             delay(250)
-            msgDao.setStatus(localId, MessageStatus.SENT.toDb())
-
-            // 3) simulateur: réponse du "correspondant"
+            messages.setStatus(id, MessageStatus.SENT.code)
             delay(600)
-            addIncoming(threadId, "Reçu: ${outgoing.body}")
+            messages.setStatus(id, MessageStatus.DELIVERED.code)
+            messages.insert(
+                MessageEntity(
+                    UUID.randomUUID().toString(), threadId, "peer", "Reçu : $body",
+                    System.currentTimeMillis(), MessageStatus.DELIVERED.code
+                )
+            )
         }
     }
 
-    /* ---------- Incoming (simulateur ou vrai réseau plus tard) ---------- */
-
-    suspend fun addIncoming(threadId: String, text: String) {
-        val incoming = MessageEntity(
-            id = UUID.randomUUID().toString(),
-            threadId = threadId,
-            sender = "other",
-            body = text,
-            time = System.currentTimeMillis(),
-            status = MessageStatus.DELIVERED.toDb()
+    /** Données de démonstration (builds debug) : message déjà « remis ». */
+    suspend fun insertDemoMessage(threadId: String, mine: Boolean, body: String, time: Long) =
+        messages.insert(
+            MessageEntity(
+                UUID.randomUUID().toString(), threadId, if (mine) SENDER_ME else "peer", body, time,
+                if (mine) MessageStatus.READ.code else MessageStatus.DELIVERED.code
+            )
         )
-        msgDao.insert(incoming)
-    }
 
-    /* ---------- MAJ de statut ---------- */
+    // ---------- Réglages privés (dans la base chiffrée) ----------
 
-    suspend fun updateStatus(id: String, status: MessageStatus) {
-        msgDao.setStatus(id, status.toDb())
-    }
+    suspend fun getSetting(key: String): String? = kv.get(key)
+    fun settingFlow(key: String): Flow<String?> = kv.flow(key)
+    suspend fun putSetting(key: String, value: String) = kv.put(KvEntity(key, value))
 
-    suspend fun markRead(id: String) = updateStatus(id, MessageStatus.READ)
-
-    /* ---------- Factory ---------- */
+    private fun MessageEntity.toUi() = ChatMsg(
+        id = id,
+        text = body,
+        time = time,
+        isMine = sender == SENDER_ME,
+        status = MessageStatus.fromCode(status)
+    )
 
     companion object {
-        fun create(ctx: Context): ChatRepository {
-            val factory = DbCrypto.supportFactory(ctx) // SQLCipher passphrase via Keystore
-            val db = AppDatabase.build(ctx, factory)
-            return ChatRepository(db)
-        }
+        const val KEY_DISPLAY_NAME = "display_name"
+        const val KEY_IDENTITY_SEED = "identity_seed"
     }
 }

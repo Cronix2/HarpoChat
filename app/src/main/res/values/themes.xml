@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.HarpoChat" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="AlertDialogTheme" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- Fond sombre -->
-        <item name="android:background">#2C2F47</item>
-
-        <item name="android:textColor">#FFFFFF</item>
-        <item name="android:textColorPrimary">#FFFFFF</item>
-        <item name="android:textColorSecondary">#B0B0B0</item>
+    <!-- Fond sombre dès le démarrage : pas de flash blanc avant l'affichage de la calculatrice. -->
+    <style name="Theme.Calc" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/calc_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>
