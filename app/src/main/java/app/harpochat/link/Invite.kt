@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 package app.harpochat.link
 
-import android.util.Base64
+import java.util.Base64
 import net.i2p.crypto.eddsa.EdDSAEngine
 import net.i2p.crypto.eddsa.EdDSAPrivateKey
 import net.i2p.crypto.eddsa.EdDSAPublicKey
@@ -142,7 +142,7 @@ object InviteCodec {
     }
 
     fun decode(wire: String): Result<Invite> = runCatching {
-        val raw = Base64.decode(wire, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val raw = Base64.getUrlDecoder().decode(wire)
         val o = JSONObject(String(raw, Charsets.UTF_8))
         require(o.optInt("v", 0) == VERSION) { "unsupported invite version" }
         require(o.optString("type") == TYPE) { "wrong invite type" }
@@ -234,9 +234,9 @@ object InviteCodec {
         return out
     }
 
-    private fun b64(bytes: ByteArray) =
-        Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    // Base64url sans padding (même format que android.util.Base64 URL_SAFE|NO_WRAP|NO_PADDING).
+    private fun b64(bytes: ByteArray): String =
+        Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
-    private fun b64d(s: String): ByteArray =
-        Base64.decode(s, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    private fun b64d(s: String): ByteArray = Base64.getUrlDecoder().decode(s)
 }

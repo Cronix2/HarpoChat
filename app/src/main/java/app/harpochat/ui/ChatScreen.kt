@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,7 +20,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterEnd
@@ -47,13 +47,19 @@ private val DividerDark = Color(0xFF1E2430)
 private val ChipDark = Color(0xFF171B22)
 
 /* ---------- Modèle minimal ---------- */
-enum class MessageStatus { SENDING, SENT, DELIVERED, READ }
+enum class MessageStatus(val code: Int) {
+    SENDING(0), SENT(1), DELIVERED(2), READ(3);
+
+    companion object {
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: SENT
+    }
+}
 
 data class ChatMsg(
     val id: String,
     val text: String,
-    /** Peut être un String "HH:mm" ou un Long (epoch millis) */
-    val time: Any,
+    /** Epoch millis. */
+    val time: Long,
     val isMine: Boolean,
     val status: MessageStatus = MessageStatus.SENT
 )
@@ -63,21 +69,18 @@ data class ChatMsg(
 fun ChatScreen(
     messages: List<ChatMsg>,
     onSend: (String) -> Unit,
-    onRetry: () -> Unit,            // conservé pour compat avec ton Activity
     title: String = "Conversation",
     avatarInitial: String = title.firstOrNull()?.uppercase() ?: "?",
     onBack: () -> Unit = {}
 ) {
     var draft by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    // Toujours afficher le dernier message (nouveau message envoyé ou reçu).
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size + 1)
+    }
 
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            background = ChatBg,
-            surface = ChatBg,
-            onBackground = Color(0xFFE7EAF1),
-            primary = BubbleMine
-        )
-    ) {
+    NoKeyboardLearning {
         Scaffold(
             containerColor = ChatBg,
             topBar = {
@@ -87,9 +90,10 @@ fun ChatScreen(
                     shape = RoundedCornerShape(16.dp),
                     tonalElevation = 2.dp,
                     modifier = Modifier
+                        .statusBarsPadding()
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .height(100.dp) // ← un peu plus grand
+                        .height(100.dp)
                 ) {
                     Row(
                         Modifier
@@ -141,9 +145,11 @@ fun ChatScreen(
                     .fillMaxSize()
                     .background(ChatBg)
                     .padding(padding)
+                    .imePadding()
             ) {
                 /* Liste des messages (collée en bas) */
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -292,9 +298,5 @@ private fun MessageBubble(msg: ChatMsg) {
 }
 
 /* ---------- Helpers ---------- */
-private fun formatTimeLabel(time: Any): String =
-    when (time) {
-        is String -> time
-        is Long -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
-        else -> ""
-    }
+private fun formatTimeLabel(time: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))

@@ -28,18 +28,10 @@
 -dontwarn androidx.room.paging.**
 
 # ---------------------------------------------------------------------------
-# SQLCipher (net.zetetic) — reflection to load JNI symbols
+# SQLCipher (net.zetetic:sqlcipher-android) — JNI
 # ---------------------------------------------------------------------------
--keep class net.sqlcipher.** { *; }
--dontwarn net.sqlcipher.**
-
-# ---------------------------------------------------------------------------
-# Signal protocol (libsignal-client)
-# ---------------------------------------------------------------------------
--keep class org.signal.** { *; }
--keep class org.whispersystems.** { *; }
--dontwarn org.signal.**
--dontwarn org.whispersystems.**
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.**
 
 # ---------------------------------------------------------------------------
 # EdDSA (net.i2p.crypto:eddsa) — used by our invite signing
@@ -48,27 +40,10 @@
 -dontwarn net.i2p.crypto.eddsa.**
 
 # ---------------------------------------------------------------------------
-# OkHttp / Okio (used by RelayWsTransport)
-# ---------------------------------------------------------------------------
--dontwarn okhttp3.internal.platform.**
--dontwarn org.conscrypt.**
--dontwarn org.bouncycastle.**
--dontwarn org.openjsse.**
-
-# ---------------------------------------------------------------------------
-# ML Kit / CameraX
-# ---------------------------------------------------------------------------
--keep class com.google.mlkit.** { *; }
--dontwarn com.google.mlkit.**
--keep class androidx.camera.** { *; }
--dontwarn androidx.camera.**
-
-# ---------------------------------------------------------------------------
 # ZXing
 # ---------------------------------------------------------------------------
 -keep class com.google.zxing.** { *; }
 -dontwarn com.google.zxing.**
--keep class com.journeyapps.barcodescanner.** { *; }
 
 # ---------------------------------------------------------------------------
 # Application entry points (Activities, Services, Receivers)
@@ -83,4 +58,15 @@
 # Reflection safety nets for data classes accessed via JSON
 # ---------------------------------------------------------------------------
 -keepclassmembers class app.harpochat.link.Invite { *; }
--keepclassmembers class app.harpochat.transport.** { *; }
+
+# ---------------------------------------------------------------------------
+# Discrétion : regroupe les classes non conservées à la racine (les noms de
+# paquets internes n'apparaissent plus dans l'APK de release) et supprime les logs.
+# ---------------------------------------------------------------------------
+-repackageclasses ''
+-renamesourcefileattribute SourceFile
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
