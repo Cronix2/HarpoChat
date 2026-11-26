@@ -1,6 +1,6 @@
 # HarpoChat Server : spécification et prérequis
 
-> **Statut :** v0.2, 2026-11-26. Décisions du porteur de projet intégrées : temps réel, TTL 7 jours, parrainage par jeton, noyau Rust partagé, mesh d'environ 5 nœuds au lancement.
+> **Statut :** v0.3, 2026-11-26. v0.2 : décisions du porteur de projet (temps réel, TTL 7 jours, parrainage par jeton, noyau Rust partagé, mesh d'environ 5 nœuds). v0.3 : écarts E1 à E10 de l'équipe serveur acceptés (voir [`server/spec-deltas.md`](server/spec-deltas.md)), déjà implémentés dans `harpochat-core` v0.1.
 > **Public :** l'équipe qui développe `harpochat-server`, en parallèle du client Android.
 > **Rôle de ce document :** c'est le **contrat** entre le client et le serveur. Toute divergence se règle ici d'abord, dans le code ensuite.
 
@@ -76,7 +76,8 @@ NodeDescriptor {
   sphinx_pub: X25519PublicKey,
   sphinx_key_epoch: u32,
   roles: [ "gateway" | "mix" | "mailbox" ],
-  endpoints: [ "wss://host:443", "tcp://host:7600" ],
+  endpoints: [ "wss://host:443" ],   // WSS + Noise uniquement (E2)
+  noise_pub: X25519PublicKey,          // clé statique Noise long terme (E4, E5)
   layer: u8,                 // couche de mix (0..2), assignée pour la topologie stratifiée
   valid_until: u64,          // epoch secondes
   sig: Ed25519Signature
@@ -88,7 +89,7 @@ NodeDescriptor {
 - **Amorçage (décidé)** : l'APK embarque, **obscurcis**, les endpoints et les **clés publiques Ed25519 des 2 nœuds racines** (§4.4). Au premier lancement, ou si plus aucun nœud connu ne répond, le client les contacte pour obtenir l'annuaire signé. Ensuite, il vit sur les nœuds appris (gossip + invitations de contact, de façon automatique et invisible pour l'utilisateur). Il n'y a pas d'annuaire central au-delà de cet amorçage.
 - **Gossip** : les nœuds s'échangent les descripteurs qu'ils connaissent. Les descripteurs expirés ou mal signés sont rejetés.
 - Un client obtient la vue du réseau auprès de **plusieurs** nœuds et en fait l'intersection, pour qu'un seul nœud ne puisse pas lui présenter une fausse topologie.
-- **Endpoint d'annuaire** : tout nœud **DOIT** répondre à `DIRECTORY_REQUEST` (type `0x20`, §8) par `DIRECTORY { descriptors: [NodeDescriptor + chaîne de Vouch], issued, sig }`. C'est la liste des nœuds valides qu'il connaît, signée par lui. Le client n'accepte un descripteur que si sa chaîne de parrainage remonte à une clé racine embarquée.
+- **Endpoint d'annuaire** : tout nœud **DOIT** répondre à la **trame de lien** `DIRECTORY_REQUEST`, envoyée directement sur la session Noise et non dans une charge Sphinx, puisqu'à l'amorçage le client ne connaît pas encore la topologie (E1). Il répond par `DIRECTORY { descriptors: [NodeDescriptor + chaîne de Vouch], issued, sig }`. C'est la liste des nœuds valides qu'il connaît, signée par lui. Le client n'accepte un descripteur que si sa chaîne de parrainage remonte à une clé racine embarquée.
 
 ### 4.3 Admission : parrainage par jeton (**décidé**)
 
@@ -99,7 +100,7 @@ Un nœud n'est accepté dans le mesh que s'il est **parrainé** par un nœud dé
 ```text
 # Sur un nœud existant (le parrain)
 $ harpochat-server invite-node
-hcn1-7K3QX9…(≈200 caractères)…M2ZP
+hcn1-7K3QX9…(≈370 caractères)…M2ZP
   ↳ valable 48 h, utilisable une seule fois
 
 # Sur la nouvelle machine
@@ -133,7 +134,9 @@ NodeInvite {
 
 - **Nœuds racines** : le ou les premiers nœuds du mesh, dont les clés publiques sont listées dans la configuration d'amorçage. Leur chaîne s'arrête à eux-mêmes.
 - **Limite de parrainage** : un nœud parraine au plus **3 nœuds par période de 30 jours** (paramétrable). Ça borne l'inondation même si un parrain est compromis.
-- **Révocation** : un parrain peut publier `Revoke { node_id, sig }`. Le nœud révoqué et tous ceux qu'il a parrainés **après** la date de révocation sont rejetés.
+- **Révocation** : un parrain peut publier `Revoke { node_id, sig }`. Elle n'est valable que si elle est signée par le **parrain direct** du nœud révoqué ou par une **racine** (E9). Le nœud révoqué et tous ceux qu'il a parrainés **après** la date de révocation sont rejetés.
+- **Saisie du jeton** : environ 370 caractères (E8). Le décodage tolère espaces, retours à la ligne, tirets, minuscules et confusions O/0, I/L/1.
+- **Objets signés** (descripteur, `Vouch`, `Revoke`, `Directory`, `NodeInvite`) : encodés `{ body: bstr(CBOR du contenu), sig }`, la signature portant sur les octets exacts de `body`. Aucune règle de CBOR canonique n'est donc nécessaire (E6).
 - **Le jeton est un secret** : il ne doit circuler que par un canal de confiance, et ne pas être journalisé.
 
 #### Sélection de chemins
@@ -175,7 +178,9 @@ Bootstrap {
 | Lien | Protocole | Remarques |
 |------|-----------|-----------|
 | Téléphone → Gateway | **WebSocket sur TLS 1.3, port 443**, avec à l'intérieur une session **Noise `XX`** (ou `IK` si la clé de la gateway est connue). | Ressemble à du trafic web ordinaire et traverse les pare-feu mobiles. Noise authentifie la gateway par sa clé, indépendamment du certificat TLS, ce qui permet des certificats auto-signés. |
-| Nœud ↔ Nœud | **TCP + Noise `XX`** (port configurable, par défaut 7600), ou WSS. | Authentification mutuelle par les clés d'identité des descripteurs. |
+| Nœud ↔ Nœud | **WSS + Noise `XX`** uniquement, port 443 par défaut (E2). | Un seul port à ouvrir pour un bénévole derrière une box. |
+
+**Authentification Noise (E4) :** Noise ne manipule que des clés X25519. Chaque nœud a donc une clé statique Noise X25519 long terme (`noise_pub`), et le handshake (`Noise_XX_25519_ChaChaPoly_BLAKE2s`) porte une signature de cette clé par `id_pub` (Ed25519). C'est ce qui permet d'authentifier une racine par son `id_pub` embarqué.
 
 - Les connexions sont **longues** et multiplexées. Un nœud **DOIT** émettre du trafic de couverture sur chaque lien, pour qu'un lien inactif ne se distingue pas d'un lien actif (§6.3).
 - Pas de HTTP/REST en clair, pas de métadonnées dans les en-têtes (User-Agent neutre, pas de cookies).
@@ -218,14 +223,18 @@ C'est la traduction technique de l'idée « un message part à deux endroits, l'
 
 ### 7.1 Identifiants
 
-- Une boîte est désignée par un **`mailbox_id` de 32 octets**, pseudo-aléatoire, dérivé **côté client** d'un secret partagé entre deux contacts. Exemple : `HKDF(secret_paire, "harpo-mbx" || epoch)`.
+- Une boîte est désignée par un **`mailbox_id` de 32 octets**, pseudo-aléatoire, dérivé **côté client** d'un secret partagé entre deux contacts. Dérivation exacte (E3) :
+  - clés de l'époque : `HKDF-SHA256(pair_secret, "harpo-mbx-keys" ‖ epoch_be)` → paire d'écriture et paire de lecture (Ed25519) ;
+  - `mailbox_id = BLAKE2b-256(len ‖ "harpo-mbx-id" ‖ write_pub ‖ read_pub)`.
+  - Le secret de paire est **directionnel** : une boîte A→B et une boîte B→A, chacune avec son secret. Seul l'expéditeur détient la clé d'écriture, seul le destinataire la clé de lecture.
+  - La boîte se vérifie **sans état** : aucun enregistrement préalable, aucune confiance au premier usage.
 - Les identifiants **tournent** à chaque époque (par exemple toutes les 24 h). Le serveur ne peut pas relier deux époques entre elles.
 - Le serveur ne sait **pas** à qui appartient une boîte, ni combien de boîtes appartiennent à la même personne.
 
 ### 7.2 Droits d'écriture et de lecture
 
-- **Écriture (PUT)** : le paquet doit porter `write_tag = HMAC(write_key, mailbox_id || nonce)`. La `write_key` n'est connue que des contacts autorisés (échangée à l'appairage). Le serveur vérifie le tag **sans** connaître la clé : la boîte est créée à son premier PUT avec `H(write_key)` comme vérificateur, ou le tag est vérifié contre une clé publique Ed25519 propre à la boîte (**variante recommandée** : chaque écriture est signée par une clé dérivée).
-- **Lecture (FETCH) et suppression (ACK)** : authentifiées par une signature avec la clé de lecture de la boîte (`read_key`, Ed25519), connue du seul destinataire.
+- **Écriture (PUT)** : `write_auth` est une signature Ed25519 par la **clé d'écriture de l'époque** (§7.1), sur la boîte, le blob et un nonce. Le serveur la vérifie contre `write_pub`, retrouvé à partir du `mailbox_id` (E3). La clé d'écriture n'est connue que de l'expéditeur autorisé.
+- **Lecture (FETCH), suppression (ACK) et abonnement (SUBSCRIBE)** : `read_auth` est une signature par la clé de lecture de l'époque, sur l'opération, son contenu, l'heure et un nonce. L'horloge du téléphone doit être exacte à ±10 min près.
 - Conséquence : un inconnu ne peut ni déposer de messages (anti-spam, consentement) ni lire une boîte.
 
 ### 7.3 Stockage
@@ -246,7 +255,7 @@ C'est la traduction technique de l'idée « un message part à deux endroits, l'
 
 La réception doit être **en temps réel**. Sans révéler l'IP du destinataire, ça se fait ainsi :
 1. Le téléphone garde une connexion WSS + Noise **permanente** avec sa gateway. Côté Android, elle est portée par un service de premier plan déguisé (ce n'est pas l'affaire du serveur).
-2. Le téléphone dépose auprès de chaque mailbox qu'il surveille un **stock de SURB** : `SUBSCRIBE { mailbox_id, read_auth, surbs: [SURB; ~10], until }`.
+2. Le téléphone dépose auprès de chaque mailbox qu'il surveille un **stock de SURB** : `SUBSCRIBE { mailbox_id, read_auth, surbs: [SURB], until }`. Un SUBSCRIBE en petit paquet porte **au plus 3 SURB** (16 en grand paquet) : le stock d'environ 10 SURB se constitue en **plusieurs** SUBSCRIBE, que la mailbox cumule (E7).
 3. Quand un PUT arrive, la mailbox **consomme un SURB** pour pousser immédiatement le blob (ou une notification `NOTIFY` si le blob dépasse un paquet) au téléphone, à travers le mix.
 4. Le téléphone réapprovisionne son stock au fil de l'eau. Ces envois de réapprovisionnement se fondent dans son trafic de couverture.
 5. Les SURB sont conservés **en RAM**, expirent à `until` ou à la rotation de la clé Sphinx des nœuds concernés, et sont supprimés au redémarrage.
@@ -269,8 +278,7 @@ type 0x03 ACK    { mailbox_id: [32], read_auth: bytes, blob_ids: [[16]] }
 type 0x04 DROP   { }                                                            // leurre, jeté à l'arrivée
 type 0x05 LOOP   { }                                                            // leurre, revient à l'émetteur
 type 0x06 SUBSCRIBE { mailbox_id: [32], read_auth: bytes, surbs: [SURB], until: u64 }
-type 0x20 DIRECTORY_REQUEST { }                                                 // annuaire (§4.2), aussi utilisé à l'amorçage
-type 0x21 DIRECTORY { descriptors: [bytes], issued: u64, sig: bytes }
+// DIRECTORY_REQUEST / DIRECTORY ne sont plus des enveloppes : ce sont des trames de lien (§4.2, E1).
 type 0x10 FETCH_RESPONSE { blobs: [{ id: [16], blob: bytes }], more: bool }     // renvoyé via SURB
 type 0x11 PUSH   { mailbox_id: [32], blobs: [{ id: [16], blob: bytes }] }       // poussé via SURB d'abonnement
 type 0x12 NOTIFY { mailbox_id: [32], pending: u16 }                             // « il y a du courrier », si trop gros pour un PUSH
@@ -358,11 +366,12 @@ Ce que le client fournit ou attend, afin que les deux implémentations restent a
 
 | Paramètre | Valeur initiale | Commentaire |
 |-----------|-----------------|-------------|
-| Taille de paquet Sphinx | 2 048 o (messages) / 32 768 o (morceaux de médias) | Deux classes de taille fixes. Tous les paquets d'une même classe sont identiques en taille. |
+| Message Noise sur le fil | 2 048 o (petit) / 32 768 o (grand) | Deux classes fixes. Paquet Sphinx : 2 029 / 32 749 o ; enveloppe max : 1 664 / 32 384 o (mesures du noyau). |
+| Blob max d'une PUT | **1 400 o** en petit paquet, ≈ 32 100 o en grand | Au-delà : découpage en morceaux (E10). |
 | Nombre de couches de mix | 1 (moins de 12 nœuds) → 3 (12 nœuds ou plus) | Chemin d'au moins 3 nœuds distincts (§6.1). |
 | Taille du mesh au lancement | ~5 nœuds, tous rôles cumulés | Décidé. |
 | Parrainages par nœud | 3 / 30 jours | Jeton à usage unique, valable 48 h. |
-| Stock de SURB par abonnement | ~10 | Réapprovisionné en continu. |
+| Stock de SURB par abonnement | ~10, en plusieurs SUBSCRIBE (3 SURB par petit paquet) | Un SURB fait 396 o (E7). |
 | Délai moyen par mix | 100 ms | Loi exponentielle. |
 | Débit de couverture client (λ) | ~1 paquet / 2 s app ouverte ; réduit en arrière-plan | Compromis entre batterie et anonymat, réglé côté client. |
 | TTL des blobs | **7 jours** | Décidé. |
