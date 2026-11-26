@@ -1,18 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="hc_dialog_bg_start">#2A2F3A</color>
-    <color name="hc_dialog_bg_end">#232732</color>
-    <color name="hc_dialog_border">#3C4657</color>
-    <color name="hc_text_primary">#FFFFFFFF</color>
-    <color name="hc_text_secondary">#C6CFDD</color>
-    <color name="hc_btn_primary">#4C6FFF</color>
-    <color name="hc_launcher_primary">#DC3D3D</color>
-    <color name="hc_launcher_secondary">#33FFFFFF</color>
+    <color name="calc_bg">#FF0F1115</color>
+    <color name="ic_bg">#FF22262E</color>
+    <color name="ic_body">#FFE9ECF1</color>
+    <color name="ic_key">#FF9BA4B2</color>
+    <color name="ic_accent">#FFF2A23A</color>
+    <color name="ic_display">#FF2B3039</color>
 </resources>
