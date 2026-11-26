@@ -14,7 +14,7 @@ Public final : une démonstration devant un jury. Il faut qu'on voie que l'auteu
 |---|---|---|
 | A | Patchs ciblés dans les 7 activités existantes | Écartée : le design réécrira ces écrans, et une protection oubliée sur un nouvel écran reste possible. |
 | **B** | **Une seule activité + navigation Compose, puis corrections dans ce cadre** | **Retenue** par le porteur de projet. |
-| C | B + protocole réel (libsignal, invitations avec clés, réseau) | Écartée : l'instance serveur fournira tout ça via `harpochat-core` (Rust/uniffi). Ne pas réimplémenter CBOR, Sphinx, les boîtes aux lettres ni les jetons côté Android. |
+| C | B + protocole réel (libsignal, invitations avec clés, réseau) | Écartée : l'équipe serveur fournira tout ça via `harpochat-core` (Rust/uniffi). Ne pas réimplémenter CBOR, Sphinx, les boîtes aux lettres ni les jetons côté Android. |
 
 ## Objectifs
 

@@ -97,7 +97,8 @@ app/src/main/java/app/harpochat/
 └── ui/                    # Theme, chat components, privacy helpers
 docs/
 ├── SERVER_SPEC.md         # Client ↔ server contract (zero-knowledge mesh)
-└── superpowers/specs/     # Design documents
+├── server/              # Integration notes from the server team
+└── design/              # Design documents
 ```
 
 ---

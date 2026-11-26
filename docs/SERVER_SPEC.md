@@ -1,7 +1,7 @@
 # HarpoChat Server : spécification et prérequis
 
 > **Statut :** v0.2, 2026-11-26. Décisions du porteur de projet intégrées : temps réel, TTL 7 jours, parrainage par jeton, noyau Rust partagé, mesh d'environ 5 nœuds au lancement.
-> **Public :** l'équipe (ou l'agent) qui développe `harpochat-server`, en parallèle du client Android.
+> **Public :** l'équipe qui développe `harpochat-server`, en parallèle du client Android.
 > **Rôle de ce document :** c'est le **contrat** entre le client et le serveur. Toute divergence se règle ici d'abord, dans le code ensuite.
 
 Les mots **DOIT / NE DOIT PAS / DEVRAIT / PEUT** ont le sens de la RFC 2119.
