@@ -30,6 +30,8 @@ import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
+import android.os.Build
+import androidx.annotation.RequiresApi
 import java.util.concurrent.atomic.AtomicBoolean
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
@@ -59,7 +61,7 @@ open class RustBuffer : Structure() {
     companion object {
         internal fun alloc(size: ULong = 0UL) = uniffiRustCall() { status ->
             // Note: need to convert the size to a `Long` value to make this work with JVM.
-            UniffiLib.ffi_harpochat_core_ffi_rustbuffer_alloc(size.toLong(), status)
+            UniffiLib.ffi_corekit_rustbuffer_alloc(size.toLong(), status)
         }.also {
             if(it.data == null) {
                throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
@@ -75,7 +77,7 @@ open class RustBuffer : Structure() {
         }
 
         internal fun free(buf: RustBuffer.ByValue) = uniffiRustCall() { status ->
-            UniffiLib.ffi_harpochat_core_ffi_rustbuffer_free(buf, status)
+            UniffiLib.ffi_corekit_rustbuffer_free(buf, status)
         }
     }
 
@@ -450,7 +452,7 @@ private fun findLibraryName(componentName: String): String {
     if (libOverride != null) {
         return libOverride
     }
-    return "harpochat_core_ffi"
+    return "corekit"
 }
 
 // Define FFI callback types
@@ -727,89 +729,89 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 // We now use JNA's "direct mapping" - unclear if same considerations apply exactly.
 internal object IntegrityCheckingUniffiLib {
     init {
-        Native.register(IntegrityCheckingUniffiLib::class.java, findLibraryName(componentName = "harpochat_core_ffi"))
+        Native.register(IntegrityCheckingUniffiLib::class.java, findLibraryName(componentName = "corekit"))
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
 
     internal fun ensureInitialized() = Unit
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_ack(
+    external fun uniffi_corekit_checksum_func_build_ack(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_drop(
+    external fun uniffi_corekit_checksum_func_build_drop(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_fetch(
+    external fun uniffi_corekit_checksum_func_build_fetch(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_forward(
+    external fun uniffi_corekit_checksum_func_build_forward(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_loop(
+    external fun uniffi_corekit_checksum_func_build_loop(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_loop_packet(
+    external fun uniffi_corekit_checksum_func_build_loop_packet(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_put(
+    external fun uniffi_corekit_checksum_func_build_put(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_build_subscribe(
+    external fun uniffi_corekit_checksum_func_build_subscribe(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_core_version(
+    external fun uniffi_corekit_checksum_func_core_version(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_cover_rate_body(
+    external fun uniffi_corekit_checksum_func_cover_rate_body(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_create_surb(
+    external fun uniffi_corekit_checksum_func_create_surb(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_decode_bootstrap(
+    external fun uniffi_corekit_checksum_func_decode_bootstrap(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_decode_frame(
+    external fun uniffi_corekit_checksum_func_decode_frame(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_decode_message(
+    external fun uniffi_corekit_checksum_func_decode_message(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_encode_frame(
+    external fun uniffi_corekit_checksum_func_encode_frame(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_epoch_of(
+    external fun uniffi_corekit_checksum_func_epoch_of(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_epochs_to_poll(
+    external fun uniffi_corekit_checksum_func_epochs_to_poll(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_forward_route(
+    external fun uniffi_corekit_checksum_func_forward_route(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_intersect_directories(
+    external fun uniffi_corekit_checksum_func_intersect_directories(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_local_delivery(
+    external fun uniffi_corekit_checksum_func_local_delivery(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_mailbox_nodes(
+    external fun uniffi_corekit_checksum_func_mailbox_nodes(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_phone_loop_route(
+    external fun uniffi_corekit_checksum_func_phone_loop_route(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_random_bytes(
+    external fun uniffi_corekit_checksum_func_random_bytes(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_recover_reply(
+    external fun uniffi_corekit_checksum_func_recover_reply(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_reply_route(
+    external fun uniffi_corekit_checksum_func_reply_route(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_sizes(
+    external fun uniffi_corekit_checksum_func_sizes(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_func_verify_directory(
+    external fun uniffi_corekit_checksum_func_verify_directory(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffihandshake_finish(
+    external fun uniffi_corekit_checksum_method_ffihandshake_finish(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffihandshake_read_message(
+    external fun uniffi_corekit_checksum_method_ffihandshake_read_message(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffihandshake_write_message(
+    external fun uniffi_corekit_checksum_method_ffihandshake_write_message(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_epoch(
+    external fun uniffi_corekit_checksum_method_ffimailboxkeys_epoch(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_mailbox_id(
+    external fun uniffi_corekit_checksum_method_ffimailboxkeys_mailbox_id(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_read_pub(
+    external fun uniffi_corekit_checksum_method_ffimailboxkeys_read_pub(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_write_pub(
+    external fun uniffi_corekit_checksum_method_ffimailboxkeys_write_pub(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffitransport_decrypt(
+    external fun uniffi_corekit_checksum_method_ffitransport_decrypt(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_method_ffitransport_encrypt(
+    external fun uniffi_corekit_checksum_method_ffitransport_encrypt(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_constructor_ffihandshake_initiator(
+    external fun uniffi_corekit_checksum_constructor_ffihandshake_initiator(
     ): Int
-    external fun uniffi_harpochat_core_ffi_checksum_constructor_ffimailboxkeys_derive(
+    external fun uniffi_corekit_checksum_constructor_ffimailboxkeys_derive(
     ): Int
-    external fun ffi_harpochat_core_ffi_uniffi_contract_version(
+    external fun ffi_corekit_uniffi_contract_version(
     ): Int
 
         
@@ -824,203 +826,203 @@ internal object UniffiLib {
     
 
     init {
-        Native.register(UniffiLib::class.java, findLibraryName(componentName = "harpochat_core_ffi"))
+        Native.register(UniffiLib::class.java, findLibraryName(componentName = "corekit"))
         uniffiEnsureInitialized()
         
     }
 
     internal fun ensureInitialized() = Unit
-    external fun uniffi_harpochat_core_ffi_fn_clone_ffihandshake(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_clone_ffihandshake(`handle`: Long,uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_harpochat_core_ffi_fn_free_ffihandshake(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_free_ffihandshake(`handle`: Long,uniffi_out_err: Pointer, 
     ): Unit
-    external fun uniffi_harpochat_core_ffi_fn_constructor_ffihandshake_initiator(uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_constructor_ffihandshake_initiator(uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_harpochat_core_ffi_fn_method_ffihandshake_finish(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffihandshake_finish(`ptr`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_method_ffihandshake_read_message(`ptr`: Long,`message`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffihandshake_read_message(`ptr`: Long,`message`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): Unit
-    external fun uniffi_harpochat_core_ffi_fn_method_ffihandshake_write_message(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffihandshake_write_message(`ptr`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_clone_ffimailboxkeys(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_clone_ffimailboxkeys(`handle`: Long,uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_harpochat_core_ffi_fn_free_ffimailboxkeys(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_free_ffimailboxkeys(`handle`: Long,uniffi_out_err: Pointer, 
     ): Unit
-    external fun uniffi_harpochat_core_ffi_fn_constructor_ffimailboxkeys_derive(`pairSecret`: RustBuffer.ByValue,`epoch`: Int,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_constructor_ffimailboxkeys_derive(`pairSecret`: RustBuffer.ByValue,`epoch`: Int,uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_epoch(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffimailboxkeys_epoch(`ptr`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_mailbox_id(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffimailboxkeys_mailbox_id(`ptr`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_read_pub(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffimailboxkeys_read_pub(`ptr`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_write_pub(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffimailboxkeys_write_pub(`ptr`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_clone_ffitransport(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_clone_ffitransport(`handle`: Long,uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_harpochat_core_ffi_fn_free_ffitransport(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_free_ffitransport(`handle`: Long,uniffi_out_err: Pointer, 
     ): Unit
-    external fun uniffi_harpochat_core_ffi_fn_method_ffitransport_decrypt(`ptr`: Long,`message`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffitransport_decrypt(`ptr`: Long,`message`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_method_ffitransport_encrypt(`ptr`: Long,`frame`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_method_ffitransport_encrypt(`ptr`: Long,`frame`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_ack(`keys`: Long,`blobIds`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_ack(`keys`: Long,`blobIds`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_drop(uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_drop(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_fetch(`keys`: Long,`max`: Short,`surbs`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_fetch(`keys`: Long,`max`: Short,`surbs`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_forward(`message`: RustBuffer.ByValue,`route`: RustBuffer.ByValue,`destination`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_forward(`message`: RustBuffer.ByValue,`route`: RustBuffer.ByValue,`destination`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_loop(uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_loop(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_loop_packet(`route`: RustBuffer.ByValue,`inbox`: RustBuffer.ByValue,`loopId`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_loop_packet(`route`: RustBuffer.ByValue,`inbox`: RustBuffer.ByValue,`loopId`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_put(`keys`: Long,`blob`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_put(`keys`: Long,`blob`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_build_subscribe(`keys`: Long,`surbs`: RustBuffer.ByValue,`untilUnixSecs`: Long,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_build_subscribe(`keys`: Long,`surbs`: RustBuffer.ByValue,`untilUnixSecs`: Long,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_core_version(uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_core_version(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_cover_rate_body(`framesPerSec`: Double,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_cover_rate_body(`framesPerSec`: Double,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_create_surb(`route`: RustBuffer.ByValue,`destination`: RustBuffer.ByValue,`surbId`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_create_surb(`route`: RustBuffer.ByValue,`destination`: RustBuffer.ByValue,`surbId`: RustBuffer.ByValue,`delaysMs`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_decode_bootstrap(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_decode_bootstrap(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_decode_frame(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_decode_frame(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_decode_message(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_decode_message(`bytes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_encode_frame(`kind`: RustBuffer.ByValue,`body`: RustBuffer.ByValue,`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_encode_frame(`kind`: RustBuffer.ByValue,`body`: RustBuffer.ByValue,`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_epoch_of(`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_epoch_of(`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun uniffi_harpochat_core_ffi_fn_func_epochs_to_poll(`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_epochs_to_poll(`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_forward_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`mailbox`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_forward_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`mailbox`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_intersect_directories(`views`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_intersect_directories(`views`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_local_delivery(uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_local_delivery(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_mailbox_nodes(`mailboxId`: RustBuffer.ByValue,`nodes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_mailbox_nodes(`mailboxId`: RustBuffer.ByValue,`nodes`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_phone_loop_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_phone_loop_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_random_bytes(`len`: Int,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_random_bytes(`len`: Int,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_recover_reply(`recovery`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_recover_reply(`recovery`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_reply_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`mailbox`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_reply_route(`nodes`: RustBuffer.ByValue,`gateway`: RustBuffer.ByValue,`mailbox`: RustBuffer.ByValue,`meanDelayMs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_sizes(`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_sizes(`sizeClass`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun uniffi_harpochat_core_ffi_fn_func_verify_directory(`signedDirectory`: RustBuffer.ByValue,`roots`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_corekit_fn_func_verify_directory(`signedDirectory`: RustBuffer.ByValue,`roots`: RustBuffer.ByValue,`nowUnixSecs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun ffi_harpochat_core_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rustbuffer_alloc(`size`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun ffi_harpochat_core_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun ffi_harpochat_core_ffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): Unit
-    external fun ffi_harpochat_core_ffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun ffi_harpochat_core_ffi_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_u8(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_u8(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_u8(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_u8(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_u8(`handle`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun ffi_harpochat_core_ffi_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_i8(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_i8(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_i8(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_i8(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_i8(`handle`: Long,uniffi_out_err: Pointer, 
     ): Byte
-    external fun ffi_harpochat_core_ffi_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_u16(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_u16(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_u16(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_u16(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_u16(`handle`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun ffi_harpochat_core_ffi_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_i16(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_i16(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_i16(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_i16(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_i16(`handle`: Long,uniffi_out_err: Pointer, 
     ): Short
-    external fun ffi_harpochat_core_ffi_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_u32(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_u32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_u32(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_u32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_u32(`handle`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun ffi_harpochat_core_ffi_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_i32(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_i32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_i32(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_i32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_i32(`handle`: Long,uniffi_out_err: Pointer, 
     ): Int
-    external fun ffi_harpochat_core_ffi_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_u64(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_u64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_u64(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_u64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_u64(`handle`: Long,uniffi_out_err: Pointer, 
     ): Long
-    external fun ffi_harpochat_core_ffi_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_i64(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_i64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_i64(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_i64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_i64(`handle`: Long,uniffi_out_err: Pointer, 
     ): Long
-    external fun ffi_harpochat_core_ffi_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_f32(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_f32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_f32(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_f32(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_f32(`handle`: Long,uniffi_out_err: Pointer, 
     ): Float
-    external fun ffi_harpochat_core_ffi_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_f64(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_f64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_f64(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_f64(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_f64(`handle`: Long,uniffi_out_err: Pointer, 
     ): Double
-    external fun ffi_harpochat_core_ffi_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_rust_buffer(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_rust_buffer(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_rust_buffer(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_rust_buffer(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
-    external fun ffi_harpochat_core_ffi_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+    external fun ffi_corekit_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_cancel_void(`handle`: Long,
+    external fun ffi_corekit_rust_future_cancel_void(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_free_void(`handle`: Long,
+    external fun ffi_corekit_rust_future_free_void(`handle`: Long,
     ): Unit
-    external fun ffi_harpochat_core_ffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: Pointer, 
+    external fun ffi_corekit_rust_future_complete_void(`handle`: Long,uniffi_out_err: Pointer, 
     ): Unit
 
         
@@ -1030,125 +1032,125 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
     // Get the bindings contract version from our ComponentInterface
     val bindings_contract_version = 33
     // Get the scaffolding contract version by calling the into the dylib
-    val scaffolding_contract_version = lib.ffi_harpochat_core_ffi_uniffi_contract_version()
+    val scaffolding_contract_version = lib.ffi_corekit_uniffi_contract_version()
     if (bindings_contract_version != scaffolding_contract_version) {
         throw RuntimeException("UniFFI contract version mismatch: try cleaning and rebuilding your project")
     }
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_ack() and 0xFFFF) != 15051) {
+    if ((lib.uniffi_corekit_checksum_func_build_ack() and 0xFFFF) != 49937) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_drop() and 0xFFFF) != 13703) {
+    if ((lib.uniffi_corekit_checksum_func_build_drop() and 0xFFFF) != 25945) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_fetch() and 0xFFFF) != 45098) {
+    if ((lib.uniffi_corekit_checksum_func_build_fetch() and 0xFFFF) != 50525) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_forward() and 0xFFFF) != 50707) {
+    if ((lib.uniffi_corekit_checksum_func_build_forward() and 0xFFFF) != 48191) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_loop() and 0xFFFF) != 28259) {
+    if ((lib.uniffi_corekit_checksum_func_build_loop() and 0xFFFF) != 52231) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_loop_packet() and 0xFFFF) != 16987) {
+    if ((lib.uniffi_corekit_checksum_func_build_loop_packet() and 0xFFFF) != 18505) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_put() and 0xFFFF) != 45970) {
+    if ((lib.uniffi_corekit_checksum_func_build_put() and 0xFFFF) != 36816) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_build_subscribe() and 0xFFFF) != 55448) {
+    if ((lib.uniffi_corekit_checksum_func_build_subscribe() and 0xFFFF) != 26410) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_core_version() and 0xFFFF) != 4933) {
+    if ((lib.uniffi_corekit_checksum_func_core_version() and 0xFFFF) != 28046) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_cover_rate_body() and 0xFFFF) != 15320) {
+    if ((lib.uniffi_corekit_checksum_func_cover_rate_body() and 0xFFFF) != 64951) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_create_surb() and 0xFFFF) != 18278) {
+    if ((lib.uniffi_corekit_checksum_func_create_surb() and 0xFFFF) != 13758) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_decode_bootstrap() and 0xFFFF) != 43233) {
+    if ((lib.uniffi_corekit_checksum_func_decode_bootstrap() and 0xFFFF) != 13173) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_decode_frame() and 0xFFFF) != 24769) {
+    if ((lib.uniffi_corekit_checksum_func_decode_frame() and 0xFFFF) != 36862) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_decode_message() and 0xFFFF) != 35532) {
+    if ((lib.uniffi_corekit_checksum_func_decode_message() and 0xFFFF) != 15375) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_encode_frame() and 0xFFFF) != 19952) {
+    if ((lib.uniffi_corekit_checksum_func_encode_frame() and 0xFFFF) != 11312) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_epoch_of() and 0xFFFF) != 63130) {
+    if ((lib.uniffi_corekit_checksum_func_epoch_of() and 0xFFFF) != 50293) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_epochs_to_poll() and 0xFFFF) != 18183) {
+    if ((lib.uniffi_corekit_checksum_func_epochs_to_poll() and 0xFFFF) != 53224) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_forward_route() and 0xFFFF) != 43615) {
+    if ((lib.uniffi_corekit_checksum_func_forward_route() and 0xFFFF) != 38048) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_intersect_directories() and 0xFFFF) != 15954) {
+    if ((lib.uniffi_corekit_checksum_func_intersect_directories() and 0xFFFF) != 43887) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_local_delivery() and 0xFFFF) != 44190) {
+    if ((lib.uniffi_corekit_checksum_func_local_delivery() and 0xFFFF) != 47181) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_mailbox_nodes() and 0xFFFF) != 36391) {
+    if ((lib.uniffi_corekit_checksum_func_mailbox_nodes() and 0xFFFF) != 6951) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_phone_loop_route() and 0xFFFF) != 18157) {
+    if ((lib.uniffi_corekit_checksum_func_phone_loop_route() and 0xFFFF) != 33028) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_random_bytes() and 0xFFFF) != 45696) {
+    if ((lib.uniffi_corekit_checksum_func_random_bytes() and 0xFFFF) != 19002) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_recover_reply() and 0xFFFF) != 64630) {
+    if ((lib.uniffi_corekit_checksum_func_recover_reply() and 0xFFFF) != 41014) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_reply_route() and 0xFFFF) != 30110) {
+    if ((lib.uniffi_corekit_checksum_func_reply_route() and 0xFFFF) != 40227) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_sizes() and 0xFFFF) != 58705) {
+    if ((lib.uniffi_corekit_checksum_func_sizes() and 0xFFFF) != 46924) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_func_verify_directory() and 0xFFFF) != 48302) {
+    if ((lib.uniffi_corekit_checksum_func_verify_directory() and 0xFFFF) != 20911) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffihandshake_finish() and 0xFFFF) != 12664) {
+    if ((lib.uniffi_corekit_checksum_method_ffihandshake_finish() and 0xFFFF) != 44828) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffihandshake_read_message() and 0xFFFF) != 28409) {
+    if ((lib.uniffi_corekit_checksum_method_ffihandshake_read_message() and 0xFFFF) != 16368) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffihandshake_write_message() and 0xFFFF) != 40) {
+    if ((lib.uniffi_corekit_checksum_method_ffihandshake_write_message() and 0xFFFF) != 3060) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_epoch() and 0xFFFF) != 7229) {
+    if ((lib.uniffi_corekit_checksum_method_ffimailboxkeys_epoch() and 0xFFFF) != 40182) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_mailbox_id() and 0xFFFF) != 46214) {
+    if ((lib.uniffi_corekit_checksum_method_ffimailboxkeys_mailbox_id() and 0xFFFF) != 39976) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_read_pub() and 0xFFFF) != 36083) {
+    if ((lib.uniffi_corekit_checksum_method_ffimailboxkeys_read_pub() and 0xFFFF) != 46789) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffimailboxkeys_write_pub() and 0xFFFF) != 49246) {
+    if ((lib.uniffi_corekit_checksum_method_ffimailboxkeys_write_pub() and 0xFFFF) != 49838) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffitransport_decrypt() and 0xFFFF) != 61095) {
+    if ((lib.uniffi_corekit_checksum_method_ffitransport_decrypt() and 0xFFFF) != 18638) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_method_ffitransport_encrypt() and 0xFFFF) != 7786) {
+    if ((lib.uniffi_corekit_checksum_method_ffitransport_encrypt() and 0xFFFF) != 48730) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_constructor_ffihandshake_initiator() and 0xFFFF) != 6558) {
+    if ((lib.uniffi_corekit_checksum_constructor_ffihandshake_initiator() and 0xFFFF) != 33132) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_harpochat_core_ffi_checksum_constructor_ffimailboxkeys_derive() and 0xFFFF) != 31451) {
+    if ((lib.uniffi_corekit_checksum_constructor_ffimailboxkeys_derive() and 0xFFFF) != 30235) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1282,28 +1284,28 @@ private class UniffiJnaCleanable(
 // using Android or not.
 // There are further runtime checks to chose the correct implementation
 // of the cleaner.
+
+
 private fun UniffiCleaner.Companion.create(): UniffiCleaner =
-    try {
-        // For safety's sake: if the library hasn't been run in android_cleaner = true
-        // mode, but is being run on Android, then we still need to think about
-        // Android API versions.
-        // So we check if java.lang.ref.Cleaner is there, and use that…
-        java.lang.Class.forName("java.lang.ref.Cleaner")
-        JavaLangRefCleaner()
-    } catch (e: ClassNotFoundException) {
-        // … otherwise, fallback to the JNA cleaner.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        AndroidSystemCleaner()
+    } else {
         UniffiJnaCleaner()
     }
 
-private class JavaLangRefCleaner : UniffiCleaner {
-    val cleaner = java.lang.ref.Cleaner.create()
+// The SystemCleaner, available from API Level 33.
+// Some API Level 33 OSes do not support using it, so we require API Level 34.
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+private class AndroidSystemCleaner : UniffiCleaner {
+    val cleaner = android.system.SystemCleaner.cleaner()
 
     override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
-        JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
+        AndroidSystemCleanable(cleaner.register(value, cleanUpTask))
 }
 
-private class JavaLangRefCleanable(
-    val cleanable: java.lang.ref.Cleaner.Cleanable
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+private class AndroidSystemCleanable(
+    private val cleanable: java.lang.ref.Cleaner.Cleanable,
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
@@ -1736,7 +1738,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
                 return;
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_harpochat_core_ffi_fn_free_ffihandshake(handle, status)
+                UniffiLib.uniffi_corekit_fn_free_ffihandshake(handle, status)
             }
         }
     }
@@ -1749,7 +1751,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
             throw InternalException("uniffiCloneHandle() called on NoHandle object");
         }
         return uniffiRustCall() { status ->
-            UniffiLib.uniffi_harpochat_core_ffi_fn_clone_ffihandshake(handle, status).also {
+            UniffiLib.uniffi_corekit_fn_clone_ffihandshake(handle, status).also {
                 // Use a reachability fence to ensure this object isn't finalized while `handle` is
                 // "in-flight" to the Rust side of things.  Otherwise, it's possible that the GC could
                 // finalize this object and free the handle before Rust can clone it.
@@ -1766,7 +1768,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
             return FfiConverterTypeFfiSession.lift(
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffihandshake_finish(
+    UniffiLib.uniffi_corekit_fn_method_ffihandshake_finish(
         it,
         _status)
 }
@@ -1783,7 +1785,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
         = 
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffihandshake_read_message(
+    UniffiLib.uniffi_corekit_fn_method_ffihandshake_read_message(
         it,
         
         FfiConverterByteArray.lower(`message`),_status)
@@ -1800,7 +1802,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffihandshake_write_message(
+    UniffiLib.uniffi_corekit_fn_method_ffihandshake_write_message(
         it,
         _status)
 }
@@ -1823,7 +1825,7 @@ open class FfiHandshake: Disposable, AutoCloseable, FfiHandshakeInterface
     @Throws(FfiException::class) fun `initiator`(): FfiHandshake {
             return FfiConverterTypeFfiHandshake.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_constructor_ffihandshake_initiator(
+    UniffiLib.uniffi_corekit_fn_constructor_ffihandshake_initiator(
     
         _status)
 }
@@ -2071,7 +2073,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
                 return;
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_harpochat_core_ffi_fn_free_ffimailboxkeys(handle, status)
+                UniffiLib.uniffi_corekit_fn_free_ffimailboxkeys(handle, status)
             }
         }
     }
@@ -2084,7 +2086,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
             throw InternalException("uniffiCloneHandle() called on NoHandle object");
         }
         return uniffiRustCall() { status ->
-            UniffiLib.uniffi_harpochat_core_ffi_fn_clone_ffimailboxkeys(handle, status).also {
+            UniffiLib.uniffi_corekit_fn_clone_ffimailboxkeys(handle, status).also {
                 // Use a reachability fence to ensure this object isn't finalized while `handle` is
                 // "in-flight" to the Rust side of things.  Otherwise, it's possible that the GC could
                 // finalize this object and free the handle before Rust can clone it.
@@ -2100,7 +2102,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
             return FfiConverterUInt.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_epoch(
+    UniffiLib.uniffi_corekit_fn_method_ffimailboxkeys_epoch(
         it,
         _status)
 }
@@ -2116,7 +2118,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_mailbox_id(
+    UniffiLib.uniffi_corekit_fn_method_ffimailboxkeys_mailbox_id(
         it,
         _status)
 }
@@ -2132,7 +2134,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_read_pub(
+    UniffiLib.uniffi_corekit_fn_method_ffimailboxkeys_read_pub(
         it,
         _status)
 }
@@ -2148,7 +2150,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffimailboxkeys_write_pub(
+    UniffiLib.uniffi_corekit_fn_method_ffimailboxkeys_write_pub(
         it,
         _status)
 }
@@ -2171,7 +2173,7 @@ open class FfiMailboxKeys: Disposable, AutoCloseable, FfiMailboxKeysInterface
     @Throws(FfiException::class) fun `derive`(`pairSecret`: kotlin.ByteArray, `epoch`: kotlin.UInt): FfiMailboxKeys {
             return FfiConverterTypeFfiMailboxKeys.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_constructor_ffimailboxkeys_derive(
+    UniffiLib.uniffi_corekit_fn_constructor_ffimailboxkeys_derive(
     
         
         FfiConverterByteArray.lower(`pairSecret`),
@@ -2411,7 +2413,7 @@ open class FfiTransport: Disposable, AutoCloseable, FfiTransportInterface
                 return;
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_harpochat_core_ffi_fn_free_ffitransport(handle, status)
+                UniffiLib.uniffi_corekit_fn_free_ffitransport(handle, status)
             }
         }
     }
@@ -2424,7 +2426,7 @@ open class FfiTransport: Disposable, AutoCloseable, FfiTransportInterface
             throw InternalException("uniffiCloneHandle() called on NoHandle object");
         }
         return uniffiRustCall() { status ->
-            UniffiLib.uniffi_harpochat_core_ffi_fn_clone_ffitransport(handle, status).also {
+            UniffiLib.uniffi_corekit_fn_clone_ffitransport(handle, status).also {
                 // Use a reachability fence to ensure this object isn't finalized while `handle` is
                 // "in-flight" to the Rust side of things.  Otherwise, it's possible that the GC could
                 // finalize this object and free the handle before Rust can clone it.
@@ -2441,7 +2443,7 @@ open class FfiTransport: Disposable, AutoCloseable, FfiTransportInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffitransport_decrypt(
+    UniffiLib.uniffi_corekit_fn_method_ffitransport_decrypt(
         it,
         
         FfiConverterByteArray.lower(`message`),_status)
@@ -2459,7 +2461,7 @@ open class FfiTransport: Disposable, AutoCloseable, FfiTransportInterface
             return FfiConverterByteArray.lift(
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_method_ffitransport_encrypt(
+    UniffiLib.uniffi_corekit_fn_method_ffitransport_encrypt(
         it,
         
         FfiConverterByteArray.lower(`frame`),_status)
@@ -3846,7 +3848,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildAck`(`keys`: FfiMailboxKeys, `blobIds`: List<kotlin.ByteArray>, `nowUnixSecs`: kotlin.ULong): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_ack(
+    UniffiLib.uniffi_corekit_fn_func_build_ack(
     
         
         FfiConverterTypeFfiMailboxKeys.lower(`keys`),
@@ -3862,7 +3864,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `buildDrop`(): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_drop(
+    UniffiLib.uniffi_corekit_fn_func_build_drop(
     
         _status)
 }
@@ -3876,7 +3878,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildFetch`(`keys`: FfiMailboxKeys, `max`: kotlin.UShort, `surbs`: List<kotlin.ByteArray>, `nowUnixSecs`: kotlin.ULong): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_fetch(
+    UniffiLib.uniffi_corekit_fn_func_build_fetch(
     
         
         FfiConverterTypeFfiMailboxKeys.lower(`keys`),
@@ -3894,7 +3896,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildForward`(`message`: kotlin.ByteArray, `route`: List<FfiHop>, `destination`: kotlin.ByteArray, `delaysMs`: List<kotlin.ULong>, `sizeClass`: FfiSizeClass): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_forward(
+    UniffiLib.uniffi_corekit_fn_func_build_forward(
     
         
         FfiConverterByteArray.lower(`message`),
@@ -3912,7 +3914,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `buildLoop`(): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_loop(
+    UniffiLib.uniffi_corekit_fn_func_build_loop(
     
         _status)
 }
@@ -3928,7 +3930,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildLoopPacket`(`route`: List<FfiHop>, `inbox`: kotlin.ByteArray, `loopId`: kotlin.ByteArray, `delaysMs`: List<kotlin.ULong>): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_loop_packet(
+    UniffiLib.uniffi_corekit_fn_func_build_loop_packet(
     
         
         FfiConverterSequenceTypeFfiHop.lower(`route`),
@@ -3946,7 +3948,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildPut`(`keys`: FfiMailboxKeys, `blob`: kotlin.ByteArray): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_put(
+    UniffiLib.uniffi_corekit_fn_func_build_put(
     
         
         FfiConverterTypeFfiMailboxKeys.lower(`keys`),
@@ -3962,7 +3964,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `buildSubscribe`(`keys`: FfiMailboxKeys, `surbs`: List<kotlin.ByteArray>, `untilUnixSecs`: kotlin.ULong, `nowUnixSecs`: kotlin.ULong): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_build_subscribe(
+    UniffiLib.uniffi_corekit_fn_func_build_subscribe(
     
         
         FfiConverterTypeFfiMailboxKeys.lower(`keys`),
@@ -3979,7 +3981,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `coreVersion`(): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_core_version(
+    UniffiLib.uniffi_corekit_fn_func_core_version(
     
         _status)
 }
@@ -3996,7 +3998,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `coverRateBody`(`framesPerSec`: kotlin.Double): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_cover_rate_body(
+    UniffiLib.uniffi_corekit_fn_func_cover_rate_body(
     
         
         FfiConverterDouble.lower(`framesPerSec`),_status)
@@ -4012,7 +4014,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `createSurb`(`route`: List<FfiHop>, `destination`: kotlin.ByteArray, `surbId`: kotlin.ByteArray, `delaysMs`: List<kotlin.ULong>): FfiSurb {
             return FfiConverterTypeFfiSurb.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_create_surb(
+    UniffiLib.uniffi_corekit_fn_func_create_surb(
     
         
         FfiConverterSequenceTypeFfiHop.lower(`route`),
@@ -4030,7 +4032,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `decodeBootstrap`(`bytes`: kotlin.ByteArray): List<FfiRoot> {
             return FfiConverterSequenceTypeFfiRoot.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_decode_bootstrap(
+    UniffiLib.uniffi_corekit_fn_func_decode_bootstrap(
     
         
         FfiConverterByteArray.lower(`bytes`),_status)
@@ -4045,7 +4047,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `decodeFrame`(`bytes`: kotlin.ByteArray): FfiFrame {
             return FfiConverterTypeFfiFrame.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_decode_frame(
+    UniffiLib.uniffi_corekit_fn_func_decode_frame(
     
         
         FfiConverterByteArray.lower(`bytes`),_status)
@@ -4060,7 +4062,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `decodeMessage`(`bytes`: kotlin.ByteArray): FfiMessage {
             return FfiConverterTypeFfiMessage.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_decode_message(
+    UniffiLib.uniffi_corekit_fn_func_decode_message(
     
         
         FfiConverterByteArray.lower(`bytes`),_status)
@@ -4075,7 +4077,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `encodeFrame`(`kind`: FfiFrameKind, `body`: kotlin.ByteArray, `sizeClass`: FfiSizeClass): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_encode_frame(
+    UniffiLib.uniffi_corekit_fn_func_encode_frame(
     
         
         FfiConverterTypeFfiFrameKind.lower(`kind`),
@@ -4091,7 +4093,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `epochOf`(`nowUnixSecs`: kotlin.ULong): kotlin.UInt {
             return FfiConverterUInt.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_epoch_of(
+    UniffiLib.uniffi_corekit_fn_func_epoch_of(
     
         
         FfiConverterULong.lower(`nowUnixSecs`),_status)
@@ -4105,7 +4107,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `epochsToPoll`(`nowUnixSecs`: kotlin.ULong): List<kotlin.UInt> {
             return FfiConverterSequenceUInt.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_epochs_to_poll(
+    UniffiLib.uniffi_corekit_fn_func_epochs_to_poll(
     
         
         FfiConverterULong.lower(`nowUnixSecs`),_status)
@@ -4121,7 +4123,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `forwardRoute`(`nodes`: List<FfiNode>, `gateway`: kotlin.ByteArray, `mailbox`: kotlin.ByteArray, `meanDelayMs`: kotlin.ULong): FfiRoute {
             return FfiConverterTypeFfiRoute.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_forward_route(
+    UniffiLib.uniffi_corekit_fn_func_forward_route(
     
         
         FfiConverterSequenceTypeFfiNode.lower(`nodes`),
@@ -4138,7 +4140,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `intersectDirectories`(`views`: List<List<FfiNode>>): List<FfiNode> {
             return FfiConverterSequenceTypeFfiNode.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_intersect_directories(
+    UniffiLib.uniffi_corekit_fn_func_intersect_directories(
     
         
         FfiConverterSequenceSequenceTypeFfiNode.lower(`views`),_status)
@@ -4152,7 +4154,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `localDelivery`(): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_local_delivery(
+    UniffiLib.uniffi_corekit_fn_func_local_delivery(
     
         _status)
 }
@@ -4167,7 +4169,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `mailboxNodes`(`mailboxId`: kotlin.ByteArray, `nodes`: List<FfiNode>): List<kotlin.ByteArray> {
             return FfiConverterSequenceByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_mailbox_nodes(
+    UniffiLib.uniffi_corekit_fn_func_mailbox_nodes(
     
         
         FfiConverterByteArray.lower(`mailboxId`),
@@ -4183,7 +4185,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `phoneLoopRoute`(`nodes`: List<FfiNode>, `gateway`: kotlin.ByteArray, `meanDelayMs`: kotlin.ULong): FfiRoute {
             return FfiConverterTypeFfiRoute.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_phone_loop_route(
+    UniffiLib.uniffi_corekit_fn_func_phone_loop_route(
     
         
         FfiConverterSequenceTypeFfiNode.lower(`nodes`),
@@ -4200,7 +4202,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `randomBytes`(`len`: kotlin.UInt): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_random_bytes(
+    UniffiLib.uniffi_corekit_fn_func_random_bytes(
     
         
         FfiConverterUInt.lower(`len`),_status)
@@ -4215,7 +4217,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `recoverReply`(`recovery`: kotlin.ByteArray, `payload`: kotlin.ByteArray): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_recover_reply(
+    UniffiLib.uniffi_corekit_fn_func_recover_reply(
     
         
         FfiConverterByteArray.lower(`recovery`),
@@ -4231,7 +4233,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `replyRoute`(`nodes`: List<FfiNode>, `gateway`: kotlin.ByteArray, `mailbox`: kotlin.ByteArray, `meanDelayMs`: kotlin.ULong): FfiRoute {
             return FfiConverterTypeFfiRoute.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_reply_route(
+    UniffiLib.uniffi_corekit_fn_func_reply_route(
     
         
         FfiConverterSequenceTypeFfiNode.lower(`nodes`),
@@ -4248,7 +4250,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
          */ fun `sizes`(`sizeClass`: FfiSizeClass): FfiSizes {
             return FfiConverterTypeFfiSizes.lift(
     uniffiRustCall() { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_sizes(
+    UniffiLib.uniffi_corekit_fn_func_sizes(
     
         
         FfiConverterTypeFfiSizeClass.lower(`sizeClass`),_status)
@@ -4263,7 +4265,7 @@ public object FfiConverterSequenceSequenceTypeFfiNode: FfiConverterRustBuffer<Li
     @Throws(FfiException::class) fun `verifyDirectory`(`signedDirectory`: kotlin.ByteArray, `roots`: List<kotlin.ByteArray>, `nowUnixSecs`: kotlin.ULong): List<FfiNode> {
             return FfiConverterSequenceTypeFfiNode.lift(
     uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_harpochat_core_ffi_fn_func_verify_directory(
+    UniffiLib.uniffi_corekit_fn_func_verify_directory(
     
         
         FfiConverterByteArray.lower(`signedDirectory`),
