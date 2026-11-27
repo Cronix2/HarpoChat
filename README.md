@@ -69,6 +69,8 @@ The name **HarpoChat** pays homage to **Harpocrates**, the Greco‑Roman god of 
 
 ## 👾 Features
 
+- 🎨 **« Silence » design** – ink black with a single mint accent, Manrope and Inter fonts embedded in the APK (no request to Google Fonts), vector stroke icons only, a circular reveal from the `=` key on unlock. See [`docs/design/2026-11-27-silence-design.md`](docs/design/2026-11-27-silence-design.md).
+- ⏳ **Ephemeral messages** – per-conversation lifetime (1 h, 24 h, 7 days); expired messages are securely deleted.
 - 🧮 **Credible façade** – complete scientific calculator (memory keys, trigonometry, powers, roots, factorial, scientific notation), generic calculator icon, neutral package id (`app.calc.scientific`), no camera permission.
 - 🔐 **Hardware-bound encryption** – database key = AES-GCM-wrapped, unwrapped only with `HMAC_Keystore(PBKDF2(code))`. No hash of the secret code is ever stored; every guess must go through the phone's secure hardware.
 - 🧨 **Silent duress wipe** – crypto-shredding (Keystore key destroyed) + database, preferences and caches deleted. Discreet confirmation: double vibration, display reset to `0`, no text.

@@ -12,7 +12,7 @@ interface ThreadDao {
     /** Conversations triées par dernière activité, avec aperçu et non-lus. */
     @Query(
         """
-        SELECT t.id, t.title, t.createdAt,
+        SELECT t.id, t.title, t.createdAt, t.verified, t.ephemeralSeconds,
             (SELECT m.body   FROM messages m WHERE m.threadId = t.id ORDER BY m.time DESC LIMIT 1) AS lastBody,
             (SELECT m.time   FROM messages m WHERE m.threadId = t.id ORDER BY m.time DESC LIMIT 1) AS lastTime,
             (SELECT m.sender FROM messages m WHERE m.threadId = t.id ORDER BY m.time DESC LIMIT 1) AS lastSender,
@@ -33,6 +33,12 @@ interface ThreadDao {
 
     @Query("UPDATE threads SET title = :title WHERE id = :id")
     suspend fun rename(id: String, title: String)
+
+    @Query("UPDATE threads SET ephemeralSeconds = :seconds WHERE id = :id")
+    suspend fun setEphemeral(id: String, seconds: Long)
+
+    @Query("SELECT ephemeralSeconds FROM threads WHERE id = :id")
+    suspend fun ephemeralSeconds(id: String): Long?
 }
 
 @Dao
@@ -48,6 +54,10 @@ interface MessageDao {
 
     @Query("UPDATE messages SET status = 3 WHERE threadId = :threadId AND sender != 'me' AND status < 3")
     suspend fun markThreadRead(threadId: String)
+
+    /** Messages éphémères arrivés à échéance (effacés pour de bon grâce à secure_delete). */
+    @Query("DELETE FROM messages WHERE expiresAt IS NOT NULL AND expiresAt <= :now")
+    suspend fun purgeExpired(now: Long): Int
 }
 
 @Dao

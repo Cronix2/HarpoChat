@@ -22,7 +22,7 @@ class Session internal constructor(
     private val dbKey: ByteArray,
     val scope: CoroutineScope
 ) {
-    val repo = ChatRepository(db, scope)
+    val repo = ChatRepository(db, scope).also { it.startExpiryJob() }
 
     internal fun close() {
         scope.cancel()
@@ -103,6 +103,12 @@ class AppLock(
         withContext(Dispatchers.Default) { vault.changePins(currentSecret, newSecret, newDuress) }
 
     fun protectionLevel(): ProtectionLevel = vault.protectionLevel()
+
+    /** « Tout effacer maintenant » (Réglages) : même destruction que le code d'effacement, puis configuration. */
+    suspend fun wipeNow() = mutex.withLock {
+        withContext(Dispatchers.IO) { wipeEverything() }
+        _state.value = LockState.NeedsSetup
+    }
 
     /** Verrouille immédiatement (bouton, retour arrière, mise en arrière-plan). */
     fun lock() {

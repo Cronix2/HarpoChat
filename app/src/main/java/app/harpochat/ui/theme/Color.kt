@@ -3,29 +3,45 @@ package app.harpochat.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Palette sombre unique de l'app (la façade calculatrice et la messagerie la partagent). */
-object AppColors {
-    // Fonds
-    val Bg = Color(0xFF0F1115)
-    val Sheet = Color(0xFF12161D)
-    val Surface = Color(0xFF1A1F27)
-    val SurfaceHigh = Color(0xFF232A35)
-    val Divider = Color(0xFF1E2430)
+/**
+ * Palette « Silence » de l'espace privé : encre, un seul accent vert d'eau,
+ * ambre réservé aux alertes, rouge doux réservé aux actions destructrices.
+ * (La façade calculatrice a sa propre palette, volontairement banale : CalcColors.)
+ */
+object Palette {
+    // Fonds et surfaces
+    val Ink = Color(0xFF0B0D10)
+    val Sheet = Color(0xFF12151A)
+    val Surface = Color(0xFF15181D)
+    val SurfaceHigh = Color(0xFF1E242B)
+    val Line = Color(0xFF1E2228)
+    val Scrim = Color(0x99050608)
 
-    // Bulles
-    val BubbleMine = Color(0xFF4C6FFF)
-    val BubbleOther = Color(0xFF1F2632)
+    // Texte
+    val Text = Color(0xFFE9EDF0)
+    val TextSoft = Color(0xFFC9D0D6)
+    val Muted = Color(0xFF8A949E)
+    val Faint = Color(0xFF6F7983)
 
-    // Textes
-    val OnBgPrimary = Color(0xFFE7EAF1)
-    val OnBubbleMine = Color(0xFFFFFFFF)
-    val OnBubbleOther = Color(0xFFD8DDE6)
-    val Muted = Color(0xFF8C96A7)
+    // Accent
+    val Mint = Color(0xFF8FD6B8)
+    val OnMint = Color(0xFF0B0D10)
+    val MintText = Color(0xFFBFEBD8)
+    val MintAvatar = Color(0xFF1C2A25)
+    val MintBubble = Color(0xFF1C3A30)
+    val MintBubbleMeta = Color(0xFF9DCDB8)
+    val MintPanel = Color(0xFF111A17)
+    val MintPanelLine = Color(0xFF1E2E28)
+    val MintTrack = Color(0xFF2B4A3F)
 
-    // Accents
-    val Accent = Color(0xFF4C6FFF)
-    val KeyLight = Color(0xFF3A404D)
-    val Timer = Color(0xFF6EE7B7)   // vert doux (remplace le #00FF00 criard)
-    val Danger = Color(0xFFFF6B6B)
-    val Warning = Color(0xFFFFC56B)
+    // Neutres d'avatar
+    val Avatar = Color(0xFF1F2229)
+    val AvatarText = Color(0xFFD5DAE0)
+
+    // Sémantique
+    val Amber = Color(0xFFF0C27A)
+    val AmberBg = Color(0xFF221B12)
+    val Danger = Color(0xFFFF9B8A)
+    val DangerBg = Color(0xFF1A1210)
+    val DangerLine = Color(0xFF4A2A26)
 }

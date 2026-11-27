@@ -5,30 +5,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val HarpoColorScheme = darkColorScheme(
-    primary = AppColors.Accent,
-    onPrimary = AppColors.OnBubbleMine,
-    primaryContainer = AppColors.SurfaceHigh,
-    onPrimaryContainer = AppColors.OnBgPrimary,
-    secondary = AppColors.Muted,
-    tertiaryContainer = AppColors.KeyLight,
-    background = AppColors.Bg,
-    onBackground = AppColors.OnBgPrimary,
-    surface = AppColors.Bg,
-    onSurface = AppColors.OnBgPrimary,
-    surfaceVariant = AppColors.Surface,
-    onSurfaceVariant = AppColors.OnBubbleOther,
-    surfaceContainer = AppColors.Sheet,
-    surfaceContainerLow = AppColors.Sheet,
-    surfaceContainerHigh = AppColors.Surface,
-    surfaceContainerHighest = AppColors.SurfaceHigh,
-    outline = AppColors.Divider,
-    outlineVariant = AppColors.Divider,
-    error = AppColors.Danger
+private val SilenceScheme = darkColorScheme(
+    primary = Palette.Mint,
+    onPrimary = Palette.OnMint,
+    primaryContainer = Palette.MintAvatar,
+    onPrimaryContainer = Palette.MintText,
+    secondary = Palette.Muted,
+    background = Palette.Ink,
+    onBackground = Palette.Text,
+    surface = Palette.Ink,
+    onSurface = Palette.Text,
+    surfaceVariant = Palette.Surface,
+    onSurfaceVariant = Palette.TextSoft,
+    surfaceContainerLowest = Palette.Ink,
+    surfaceContainerLow = Palette.Sheet,
+    surfaceContainer = Palette.Sheet,
+    surfaceContainerHigh = Palette.Surface,
+    surfaceContainerHighest = Palette.SurfaceHigh,
+    outline = Palette.Line,
+    outlineVariant = Palette.Line,
+    error = Palette.Danger,
+    scrim = Palette.Scrim
 )
 
 /** Thème unique, appliqué une seule fois à la racine (MainActivity). */
 @Composable
 fun HarpoTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = HarpoColorScheme, typography = Typography, content = content)
+    MaterialTheme(colorScheme = SilenceScheme, typography = Typography, content = content)
 }
