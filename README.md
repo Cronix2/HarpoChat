@@ -85,8 +85,8 @@ The name **HarpoChat** pays homage to **Harpocrates**, the Greco‑Roman god of 
 ## 📁 Project Structure
 
 ```text
-app/src/main/java/app/harpochat/
-├── HarpoApp.kt            # Application: single AppLock instance, locks on background
+app/src/main/java/app/calc/scientific/   # neutral package name (same as the applicationId)
+├── CalcApp.kt             # Application: single AppLock instance, locks on background
 ├── MainActivity.kt        # Single activity: setup → calculator (locked) → private space
 ├── calculator/            # CalcEngine (pure Kotlin), ViewModel, screen
 ├── security/              # Vault (key derivation), KeyBinder (Keystore), AppLock, PinPolicy
@@ -96,7 +96,9 @@ app/src/main/java/app/harpochat/
 ├── settings/              # Display name, change codes, security status
 ├── navigation/            # Private-space navigation graph
 ├── link/                  # Signed invitation format (transitional, replaced by harpochat-core)
+├── net/                   # Mesh link: trust roots, TLS + Noise link, cover traffic, loops
 └── ui/                    # Theme, chat components, privacy helpers
+app/src/main/java/app/harpochat/core/   # generated bindings of the shared Rust core (scripts/update-core.sh)
 docs/
 ├── SERVER_SPEC.md         # Client ↔ server contract (zero-knowledge mesh)
 ├── server/              # Integration notes from the server team

@@ -46,8 +46,8 @@ L'envoi et la réception de messages par le mesh constituent l'étape N2.
 - **Moins de 3 nœuds** : les leurres prennent le trajet direct par la gateway, en mode développement prévu par l'équipe serveur. L'écran le signale.
 - **Identifiants dans l'APK.**
   - Depuis la v0.2.0 du noyau, la bibliothèque native s'appelle `libcorekit.so`. Elle ne contient plus que les étiquettes du protocole (`harpochat/v1/…`).
-  - Le nom de package `app.harpochat` reste lisible à trois endroits : le manifeste (activité et application), les entités Room, et les bindings, que JNA oblige à garder.
-  - Le cacher demanderait de renommer les packages de l'app et des bindings : c'est un chantier « discrétion » à part. La façade (nom, icône, identifiant `app.calc.scientific`) n'est pas concernée.
+  - Le code de l'app est dans le package neutre `app.calc.scientific`, le même nom que l'identifiant d'application. Les noms du manifeste et des entités Room ne trahissent donc plus rien.
+  - Les bindings du noyau passent au package `org.corekit` avec la v0.2.0. Le format d'invitation transitoire (`harpo_invite` dans le QR) disparaît à l'étape N2.
 - **Android 9 minimum (API 28).** Les bindings générés en mode Android appellent `Reference.reachabilityFence` à chaque appel au noyau. Android 8 ne reçoit plus de correctifs de sécurité.
 
 ## Vérification
