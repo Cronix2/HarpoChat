@@ -15,7 +15,7 @@ L'envoi et la réception de messages par le mesh constituent l'étape N2.
 ## Ce qui est en place
 
 1. **Noyau `harpochat-core` embarqué**, avec les bindings uniffi et JNA :
-   - bibliothèques natives `arm64-v8a`, `armeabi-v7a` et `x86_64` ; l'APK est limité à ces architectures ;
+   - bibliothèque native `libcorekit.so` pour `arm64-v8a`, `armeabi-v7a` et `x86_64` ; l'APK est limité à ces architectures ;
    - mise à jour par `scripts/update-core.sh [tag]`, qui vérifie l'empreinte SHA-256 de l'archive ; la version embarquée est notée dans `app/core-version.txt`.
 2. **Racines de confiance** (`app/build.gradle.kts`) : identité publique et adresses des nœuds racines, encodées en CBOR à la compilation.
    - Le bloc est obscurci par un XOR avec un flux SHA-256 : aucune adresse ne se lit en clair dans l'APK. C'est de la discrétion, pas un secret.
@@ -44,7 +44,11 @@ L'envoi et la réception de messages par le mesh constituent l'étape N2.
 - **Connexion seulement pendant la session.** L'app se verrouille dès qu'elle quitte l'écran, et le lien suit. Recevoir en arrière-plan relève de l'étape N3 (service de premier plan et notification déguisée).
 - **Une seule vue de l'annuaire.** La gateway ne peut pas ajouter de faux nœuds : tout est vérifié jusqu'aux racines. Elle pourrait en revanche en omettre. Croiser les annuaires de plusieurs nœuds (`intersectDirectories`) viendra avec plusieurs gateways.
 - **Moins de 3 nœuds** : les leurres prennent le trajet direct par la gateway, en mode développement prévu par l'équipe serveur. L'écran le signale.
-- **Identifiants dans l'APK.** R8 renomme les classes des bindings. En revanche, le nom de la bibliothèque native et les noms de ses fonctions contiennent « harpochat » : il faut un renommage du namespace uniffi côté serveur.
+- **Identifiants dans l'APK.**
+  - Depuis la v0.2.0 du noyau, la bibliothèque native s'appelle `libcorekit.so`. Elle ne contient plus que les étiquettes du protocole (`harpochat/v1/…`).
+  - Le nom de package `app.harpochat` reste lisible à trois endroits : le manifeste (activité et application), les entités Room, et les bindings, que JNA oblige à garder.
+  - Le cacher demanderait de renommer les packages de l'app et des bindings : c'est un chantier « discrétion » à part. La façade (nom, icône, identifiant `app.calc.scientific`) n'est pas concernée.
+- **Android 9 minimum (API 28).** Les bindings générés en mode Android appellent `Reference.reachabilityFence` à chaque appel au noyau. Android 8 ne reçoit plus de correctifs de sécurité.
 
 ## Vérification
 

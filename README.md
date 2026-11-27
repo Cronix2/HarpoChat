@@ -113,7 +113,7 @@ To build and run **HarpoChat** you will need:
 
 - **JDK 17** – the project targets Java 17.
 - **Android Studio Hedgehog** or later, or the command‑line **Gradle** wrapper.
-- **Android SDK** – `compileSdk` is 36 and `minSdk` is 26.
+- **Android SDK** – `compileSdk` is 36 and `minSdk` is 28 (Android 9).
 - A device or emulator running **Android 8.0 (API 26)** or higher.
 
 ### 📲 Download

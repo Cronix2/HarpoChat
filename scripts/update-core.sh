@@ -8,8 +8,8 @@
 #
 # Télécharge `harpochat-core-android.zip` depuis les releases de Cronix2/HarpoChat_Serveur,
 # vérifie son SHA-256 contre `SHA256SUMS`, puis remplace :
-#   app/src/main/jniLibs/<abi>/libharpochat_core_ffi.so
-#   app/src/main/java/app/harpochat/core/harpochat_core_ffi.kt   (bindings générés, ne pas modifier)
+#   app/src/main/jniLibs/<abi>/*.so                              (bibliothèque native du noyau)
+#   app/src/main/java/app/harpochat/core/*.kt                    (bindings générés, ne pas modifier)
 #   app/src/androidTest/assets/core-vectors/v1.json                (vecteurs rejoués sur appareil)
 # et note la version dans app/core-version.txt.
 # Prérequis : gh (authentifié), unzip, sha256sum.
@@ -30,7 +30,8 @@ unzip -q "$WORK/harpochat-core-android.zip" -d "$WORK/x"
 rm -rf "$ROOT/app/src/main/jniLibs"
 cp -r "$WORK/x/jniLibs" "$ROOT/app/src/main/jniLibs"
 mkdir -p "$ROOT/app/src/main/java/app/harpochat/core" "$ROOT/app/src/androidTest/assets/core-vectors"
-cp "$WORK/x/kotlin/app/harpochat/core/harpochat_core_ffi.kt" "$ROOT/app/src/main/java/app/harpochat/core/"
+rm -f "$ROOT/app/src/main/java/app/harpochat/core/"*.kt
+cp "$WORK/x/kotlin/app/harpochat/core/"*.kt "$ROOT/app/src/main/java/app/harpochat/core/"
 cp "$WORK/x/test-vectors/v1.json" "$ROOT/app/src/androidTest/assets/core-vectors/v1.json"
 
 NAME="$(gh release view "$TAG" -R "$REPO" --json name -q .name)"

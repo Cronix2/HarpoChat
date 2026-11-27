@@ -79,7 +79,9 @@ android {
     defaultConfig {
         // Neutral id: what Settings > Apps and adb show. Never "harpochat".
         applicationId = "app.calc.scientific"
-        minSdk = 26
+        // Android 9 : les bindings du noyau (uniffi, mode Android) utilisent Reference.reachabilityFence (API 28).
+        // Android 8 ne reçoit plus de correctifs de sécurité.
+        minSdk = 28
         targetSdk = 36
         // Fournis par la CI de release (numéro d'exécution) ; valeurs de développement sinon.
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
@@ -169,6 +171,7 @@ dependencies {
 
     // ---------- Réseau : noyau harpochat-core (bindings uniffi via JNA) + WebSocket OkHttp ----------
     implementation("net.java.dev.jna:jna:5.17.0@aar")
+    implementation("androidx.annotation:annotation:1.9.1") // bindings générés en mode Android
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // ---------- Ed25519 (format d'invitation transitoire, remplacé par harpochat-core) ----------
