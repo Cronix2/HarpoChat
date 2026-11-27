@@ -2,28 +2,39 @@
 package app.harpochat.data
 
 /**
- * État du réseau chiffré affiché dans le panneau « Chiffrement et réseau ».
- *
- * Tant que le transport réel (harpochat-core) n'est pas branché, ces valeurs sont
- * SIMULÉES et l'interface le dit explicitement ([simulated]).
+ * État réel du lien au mesh, affiché par l'indicateur des conversations et le panneau
+ * « Chiffrement et réseau ». Produit par [app.harpochat.net.MeshClient].
  */
 data class NetworkStatus(
-    val activeRelays: Int,
-    val totalRelays: Int,
-    val meanDelayMs: Int,
-    val coverTraffic: Boolean,
-    val hops: List<String>,
-    val simulated: Boolean
+    val phase: Phase,
+    /** Nœuds de l'annuaire vérifié jusqu'aux racines embarquées. */
+    val totalRelays: Int = 0,
+    /** Nœuds de l'annuaire qui ne sont pas jugés défaillants par la mesure des loops. */
+    val activeRelays: Int = 0,
+    /** Médiane des allers-retours des loops, ou null tant qu'aucun n'est revenu. */
+    val loopRttMs: Long? = null,
+    val loopsSent: Int = 0,
+    val loopsReturned: Int = 0,
+    val loopsLost: Int = 0,
+    /** Trafic leurre montant (drops et loops) et descendant (débit constant demandé à la gateway). */
+    val coverTraffic: Boolean = false,
+    /** Étapes du trajet d'un message, de la gateway à la boîte aux lettres. */
+    val hops: List<String> = emptyList(),
+    /**
+     * Moins de 3 nœuds : la gateway est aussi la boîte aux lettres. Le contenu reste chiffré,
+     * mais le réseau ne cache plus qui parle à qui. Mode de développement, signalé à l'écran.
+     */
+    val anonymous: Boolean = false,
+    /** Empreinte courte du nœud d'entrée (8 caractères hexadécimaux). */
+    val gateway: String? = null,
+    /** Dernière erreur de connexion, lisible. */
+    val error: String? = null,
+    /** Prochaine tentative de connexion (horloge murale, ms), en phase [Phase.OFFLINE]. */
+    val retryAt: Long? = null
 ) {
+    enum class Phase { STOPPED, CONNECTING, ONLINE, OFFLINE }
+
     companion object {
-        /** Ce que montrera un mesh de 5 nœuds avec un chemin entrée → relais → boîte (spec v0.3, §6.1). */
-        val Simulated = NetworkStatus(
-            activeRelays = 5,
-            totalRelays = 5,
-            meanDelayMs = 1200,
-            coverTraffic = true,
-            hops = listOf("Entrée", "Relais", "Boîte"),
-            simulated = true
-        )
+        val Stopped = NetworkStatus(Phase.STOPPED)
     }
 }

@@ -57,7 +57,7 @@
 
 There are **no default codes**: on first launch the user chooses both codes. They are never stored — they are stretched (PBKDF2) and bound to the phone's secure hardware (Android Keystore, StrongBox when available) to derive the key that encrypts the local database (SQLCipher). Without the code **and** the physical phone, the data is unreadable.
 
-Networking (a zero-knowledge relay mesh) is developed in the separate `harpochat-server` repository; see [`docs/SERVER_SPEC.md`](docs/SERVER_SPEC.md). Until the shared Rust core lands, the Android app simulates delivery locally.
+Networking (a zero-knowledge relay mesh) is developed in the separate `HarpoChat_Serveur` repository; see [`docs/SERVER_SPEC.md`](docs/SERVER_SPEC.md). The app embeds the shared Rust core (`harpochat-core`, updated with `scripts/update-core.sh`) and, while unlocked, keeps an authenticated link to the mesh (TLS + Noise, node identity checked against embedded roots) with Poisson cover traffic and loop measurements. Message delivery over the mesh is the next step; until then, conversations are simulated locally.
 
 ---
 

@@ -4,7 +4,9 @@
     <!--
         Aucune permission sensible : le scan QR passe par le scanner du système
         (Google Code Scanner), l'app n'accède jamais à la caméra.
+        INTERNET (permission normale, sans demande à l'utilisateur) : lien chiffré vers le mesh.
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".HarpoApp"
