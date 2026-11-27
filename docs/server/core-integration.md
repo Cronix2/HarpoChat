@@ -11,8 +11,8 @@
    pas investir dessus.
 2. **Tous les formats du mesh viennent d'un seul crate Rust, `harpochat-core`.** Ne réimplémentez ni
    CBOR, ni Sphinx, ni la dérivation des boîtes, ni les jetons en Kotlin : appelez le noyau.
-3. **Les bindings Kotlin (uniffi) arrivent en phase P2** (`core-v0.2.0`). D'ici là, l'API Rust
-   ci-dessous est la référence : les noms et la sémantique resteront ceux-là.
+3. **Les bindings Kotlin (uniffi) sont livrés en phase P2** : voir [`gradle-integration.md`](gradle-integration.md).
+   Les noms Kotlin suivent ceux de l'API Rust ci-dessous (`build_put` → `buildPut`, etc.).
 4. Le noyau est **pur** : aucun réseau, aucun fichier, aucune horloge. L'heure est toujours passée en
    paramètre (`now_unix_secs`). Le réseau (WSS + Noise) reste dans l'app.
 
@@ -91,10 +91,72 @@ la table `sizes`. Les vecteurs Sphinx figent un paquet et les clés des nœuds ;
 est le texte clair après traitement de tous les sauts. Votre CI devra les rejouer via les bindings
 de P2. Côté serveur, `cargo test -p harpochat-core --test vectors` les rejoue.
 
+## 6. Connexion à un nœud (phase P4, implémentée côté serveur)
+
+Pile, de bas en haut : **TCP → TLS 1.3 → WebSocket (messages binaires uniquement) → Noise XX**.
+
+1. **TLS :** le nœud présente un certificat auto-signé, régénéré en RAM à chaque démarrage.
+   **Acceptez n'importe quel certificat** (mais laissez la vérification des signatures de la
+   poignée de main TLS active). TLS ne sert qu'à ressembler à du HTTPS ordinaire. URL de la requête
+   WebSocket : `wss://harpochat/` (le chemin est ignoré).
+2. **Noise :** `Noise_XX_25519_ChaChaPoly_BLAKE2s`, le téléphone est l'**initiateur**. Utilisez
+   `harpochat_core::noise::Handshake::initiator(&X25519Secret::generate(), None)` : une clé statique
+   **neuve à chaque connexion**, sans identité. Trois messages binaires : vous écrivez le 1, lisez le
+   2, écrivez le 3. Le message 2 porte la preuve `NodeAuth` du nœud. Après `into_transport()`,
+   **vérifiez `peer.node_id == Some(id_pub attendu)`**, la clé de la racine ou du descripteur :
+   c'est ce qui authentifie le nœud.
+3. **Ensuite**, chaque message WebSocket est **un** message Noise de 2 048 o (`Small`) ou de
+   32 768 o (`Large`). Le clair est une `LinkFrame` de 2 032 / 32 752 o. Toute autre taille, tout
+   message texte ou tout déchiffrement raté **ferme le lien**.
+4. **Trames utiles côté téléphone :**
+
+| Trame | Sens | Corps |
+|---|---|---|
+| `RegisterInbox` (0x04) | téléphone → nœud | 32 octets aléatoires, **nouveaux à chaque connexion**. C'est la destination de vos SURB. |
+| `Sphinx` (0x01) | téléphone → nœud | un paquet Sphinx (`sphinx::build_forward` ou `use_surb`). |
+| `Deliver` (0x08) | nœud → téléphone | `surb_id[16] ‖ charge utile finale` → `recover_reply(&recovery, payload)`. |
+| `DirectoryReq` (0x02) | téléphone → nœud | vide. |
+| `Directory` (0x03) | nœud → téléphone | CBOR `Signed<Directory>` → `directory::verify_directory`. |
+| `Padding` (0x00) | les deux | trafic de couverture du lien, à ignorer. |
+
+5. **Limite de débit :** 50 trames/s par lien, rafales de 200. Au-delà, le lien est fermé.
+6. **Rejets silencieux :** une PUT ou un FETCH mal signé, rejoué ou expiré ne reçoit **aucune**
+   réponse. Prévoyez un délai d'attente, puis une nouvelle tentative avec un nouveau nonce.
+7. **Réponses de FETCH :** une réponse par SURB fourni, au plus ~1 400 o de blobs chacune, avec
+   `more = true` s'il reste du courrier. Fournissez plusieurs SURB, ou refaites un FETCH.
+
+**En M1 (P4), le chemin ne compte qu'un saut** : `[gateway]` pour l'aller comme pour les SURB.
+Les chemins multi-nœuds arrivent en P5, sans changement de format.
+
+## 7. Chemins multi-nœuds (phase P5, implémentée)
+
+1. **Vue du réseau :** `verifyDirectory` sur les annuaires de plusieurs nœuds, puis
+   `intersectDirectories`. Le résultat (`List<FfiNode>`) sert à toutes les fonctions ci-dessous.
+2. **Où est une boîte ?** `mailboxNodes(mailboxId, nodes)` renvoie **3 répliques**, choisies par
+   hachage de rendez-vous. Expéditeur et destinataire les calculent chacun de leur côté, sans se
+   concerter.
+   - **PUT** : envoyez une copie à **chaque réplique qui n'est pas votre gateway**.
+   - **FETCH / SUBSCRIBE** : interrogez **les répliques qui ne sont pas votre gateway**.
+
+   Une route ne peut jamais finir sur sa propre gateway (`forwardRoute` renvoie `Malformed`) : la
+   gateway verrait à la fois votre IP et l'identifiant de la boîte. Avec 3 répliques, l'ensemble de
+   l'expéditeur et celui du destinataire ont toujours au moins une réplique en commun.
+3. **Aller :** `forwardRoute(nodes, gatewayId, replicaId, 100uL)` renvoie `FfiRoute { hops, delaysMs }`,
+   à passer tel quel à `buildForward(env, route.hops, localDelivery(), route.delaysMs, SMALL)`.
+4. **Retour (SURB) :** `replyRoute(nodes, gatewayId, replicaId, 100uL)` renvoie `mix… → gateway`, à
+   passer à `createSurb(route.hops, inbox, surbId, route.delaysMs)`.
+5. **Taille du mesh :** en dessous de 12 nœuds, un mix ; à partir de 12, trois mix (un par couche).
+   Les délais suivent une loi exponentielle de moyenne 100 ms, uniquement sur les mix.
+   Diversité : le noyau évite deux nœuds du même parrain, puis du même /16 IPv4, et relâche ces
+   contraintes dans cet ordre si le mesh est trop petit.
+6. **Nœud injoignable :** retirez-le de votre vue et recalculez routes et répliques. Les autres
+   répliques gardent le courrier.
+
 ## 5. Ce qui arrive ensuite
 
 | Phase | Pour vous |
 |---|---|
-| P2 — `core-v0.2.0` | Bindings uniffi + `.so` pour `arm64-v8a`, `armeabi-v7a`, `x86_64`, guide Gradle. |
-| P4 | Format des trames `RegisterInbox` / `DirectoryReq`, handshake Noise (`Noise_XX_25519_ChaChaPoly_BLAKE2s` + signature de la clé statique, écart E4), premier serveur joignable. |
-| P5–P6 | Mesh à 5 nœuds, SUBSCRIBE / PUSH en temps réel. |
+| P2 — `core-v0.2.0` | **Fait** : voir [`gradle-integration.md`](gradle-integration.md). |
+| P4 | **Fait** : voir §6. Premier serveur joignable (`harpochat-server run`). |
+| P5 | **Fait** : voir §7. |
+| P6 | SUBSCRIBE / PUSH en temps réel, trafic de couverture. |

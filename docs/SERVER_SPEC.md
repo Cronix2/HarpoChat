@@ -1,6 +1,6 @@
 # HarpoChat Server : spécification et prérequis
 
-> **Statut :** v0.3, 2026-11-26. v0.2 : décisions du porteur de projet (temps réel, TTL 7 jours, parrainage par jeton, noyau Rust partagé, mesh d'environ 5 nœuds). v0.3 : écarts E1 à E10 de l'équipe serveur acceptés (voir [`server/spec-deltas.md`](server/spec-deltas.md)), déjà implémentés dans `harpochat-core` v0.1.
+> **Statut :** v0.4, 2026-11-26. v0.2 : décisions du porteur de projet (temps réel, TTL 7 jours, parrainage par jeton, noyau Rust partagé, mesh d'environ 5 nœuds). v0.3 : écarts E1 à E10 de l'équipe serveur acceptés (voir [`server/spec-deltas.md`](server/spec-deltas.md)), déjà implémentés dans `harpochat-core` v0.1. v0.4 : écarts E11 à E14 acceptés (trame `Deliver`, certificat TLS régénéré en RAM, rétention des nonces, placement des boîtes sur 3 répliques) ; le détail fait foi dans `server/spec-deltas.md`.
 > **Public :** l'équipe qui développe `harpochat-server`, en parallèle du client Android.
 > **Rôle de ce document :** c'est le **contrat** entre le client et le serveur. Toute divergence se règle ici d'abord, dans le code ensuite.
 
