@@ -30,11 +30,11 @@ interface KeyBinder {
     fun protectionLevel(): ProtectionLevel
 }
 
-enum class ProtectionLevel(val label: String) {
-    STRONGBOX("Puce sécurisée dédiée (StrongBox)"),
-    TEE("Environnement d'exécution sécurisé (TEE)"),
-    SOFTWARE("Logicielle"),
-    UNKNOWN("Inconnue")
+enum class ProtectionLevel(val label: String, val short: String, val hardware: Boolean) {
+    STRONGBOX("Puce sécurisée dédiée (StrongBox)", "Puce dédiée", true),
+    TEE("Zone d'exécution sécurisée du processeur (TEE)", "Zone sécurisée", true),
+    SOFTWARE("Logicielle (appareil sans puce sécurisée)", "Logiciel", false),
+    UNKNOWN("Inconnue", "Inconnue", false)
 }
 
 /** Implémentation Android Keystore : clé HMAC non exportable, StrongBox si disponible. */

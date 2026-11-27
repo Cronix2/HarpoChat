@@ -8,15 +8,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +36,7 @@ import app.harpochat.security.AppLock
 import app.harpochat.security.AttemptOutcome
 import app.harpochat.security.LockState
 import app.harpochat.setup.SetupScreen
+import app.harpochat.ui.CircleRevealShape
 import app.harpochat.ui.SecureWindow
 import app.harpochat.ui.theme.HarpoTheme
 import kotlinx.coroutines.delay
@@ -59,28 +68,49 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Courbe de l'ouverture : départ vif, arrivée douce. */
+private val RevealEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
 @Composable
 private fun AppRoot(appLock: AppLock) {
     val state by appLock.state.collectAsStateWithLifecycle()
+    val haptics = LocalHapticFeedback.current
     // Captures bloquées partout sauf sur la façade (une calculatrice qui interdit les captures intrigue).
     SecureWindow(enabled = state !is LockState.Locked)
 
-    Crossfade(targetState = state, animationSpec = tween(220), label = "lock-state") { s ->
-        when (s) {
-            LockState.NeedsSetup -> SetupScreen(onConfigure = appLock::setup)
-            LockState.Locked -> LockedCalculator(appLock)
-            is LockState.Unlocked -> PrivateNavHost(s.session, appLock)
+    var equalsCenter by remember { mutableStateOf(Offset.Unspecified) }
+    val reveal = remember { Animatable(1f) }
+
+    // Ouverture : le cercle part de la touche « = ». Le verrouillage, lui, est instantané :
+    // la base est déjà fermée et rien de l'espace privé ne doit rester à l'écran.
+    LaunchedEffect(state is LockState.Unlocked) {
+        if (state is LockState.Unlocked) {
+            reveal.snapTo(0f)
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            reveal.animateTo(1f, tween(durationMillis = 450, easing = RevealEasing))
+        }
+    }
+
+    when (val s = state) {
+        LockState.NeedsSetup -> SetupScreen(onConfigure = appLock::setup)
+        LockState.Locked -> LockedCalculator(appLock) { equalsCenter = it }
+        is LockState.Unlocked -> Box(Modifier.fillMaxSize()) {
+            if (reveal.value < 1f) LockedCalculator(appLock) { equalsCenter = it }
+            Box(Modifier.fillMaxSize().clip(CircleRevealShape(reveal.value, equalsCenter))) {
+                PrivateNavHost(s.session, appLock)
+            }
         }
     }
 }
 
 @Composable
-private fun LockedCalculator(appLock: AppLock) {
+private fun LockedCalculator(appLock: AppLock, onEqualsPositioned: (Offset) -> Unit) {
     val vm: CalculatorViewModel = viewModel()
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     CalculatorScreen(
         viewModel = vm,
+        onEqualsPositioned = onEqualsPositioned,
         onLongEquals = { digits ->
             scope.launch {
                 when (appLock.attempt(digits)) {

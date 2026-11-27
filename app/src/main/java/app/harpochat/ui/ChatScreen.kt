@@ -1,54 +1,65 @@
 // SPDX-License-Identifier: MIT
 package app.harpochat.ui
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DoneAll
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Alignment.Companion.CenterEnd
-import androidx.compose.ui.Alignment.Companion.CenterStart
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.harpochat.data.EphemeralChoice
+import app.harpochat.ui.theme.HarpoIcons
+import app.harpochat.ui.theme.Palette
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
 
+/* ---------- Modèle ---------- */
 
-/* ---------- Palette sombre ---------- */
-private val ChatBg = Color(0xFF0F1115)
-private val BubbleMine = Color(0xFF4C6FFF)
-private val BubbleOther = Color(0xFF1F2632)
-private val OnBubbleMine = Color.White
-private val OnBubbleOther = Color(0xFFD8DDE6)
-private val DividerDark = Color(0xFF1E2430)
-private val ChipDark = Color(0xFF171B22)
-
-/* ---------- Modèle minimal ---------- */
-enum class MessageStatus(val code: Int) {
-    SENDING(0), SENT(1), DELIVERED(2), READ(3);
+enum class MessageStatus(val code: Int, val label: String) {
+    SENDING(0, "envoi…"), SENT(1, "envoyé"), DELIVERED(2, "remis"), READ(3, "lu");
 
     companion object {
         fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: SENT
@@ -61,242 +72,248 @@ data class ChatMsg(
     /** Epoch millis. */
     val time: Long,
     val isMine: Boolean,
-    val status: MessageStatus = MessageStatus.SENT
+    val status: MessageStatus = MessageStatus.SENT,
+    /** Date de destruction si le fil est éphémère. */
+    val expiresAt: Long? = null
 )
 
-/* ---------- Écran de chat ---------- */
+/* ---------- Écran ---------- */
+
 @Composable
 fun ChatScreen(
+    title: String,
+    verified: Boolean,
+    ephemeral: EphemeralChoice,
     messages: List<ChatMsg>,
     onSend: (String) -> Unit,
-    title: String = "Conversation",
-    avatarInitial: String = title.firstOrNull()?.uppercase() ?: "?",
-    onBack: () -> Unit = {}
+    onEphemeralChange: (EphemeralChoice) -> Unit,
+    onBack: () -> Unit
 ) {
-    var draft by remember { mutableStateOf("") }
+    var draft by rememberSaveable { mutableStateOf("") }
+    var showAttach by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    // Toujours afficher le dernier message (nouveau message envoyé ou reçu).
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size + 1)
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size)
     }
 
     NoKeyboardLearning {
-        Scaffold(
-            containerColor = ChatBg,
-            topBar = {
-                // Cartouche en haut (avatar + nom)
-                Surface(
-                    color = ChipDark,
-                    shape = RoundedCornerShape(16.dp),
-                    tonalElevation = 2.dp,
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .height(100.dp)
-                ) {
-                    Row(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 20.dp, vertical = 30.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // ← Bouton retour
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Retour",
-                                tint = Color.White
-                            )
-                        }
-
-                        Spacer(Modifier.width(10.dp))
-
-                        // Avatar
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF2A2F3A),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    avatarInitial,
-                                    color = Color(0xFFD8DDE6),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(10.dp))
-
-                        // Titre
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        ) { padding ->
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .background(ChatBg)
-                    .padding(padding)
-                    .imePadding()
+        Column(Modifier.fillMaxSize().background(Palette.Ink).imePadding()) {
+            ChatHeader(title, verified, ephemeral, onEphemeralChange, onBack)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
             ) {
-                /* Liste des messages (collée en bas) */
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.Bottom,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    // Espace “début de conversation” jusqu’à ~la moitié de l’écran
-                    item(key = "half-spacer") {
-                        Box(
-                            Modifier
-                                .fillParentMaxHeight(0.5f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (messages.size < 6) {
-                                Text(
-                                    "Voici le début de la conversation",
-                                    color = Color(0xFFFFE082),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
-
-                    // Messages
-                    items(messages, key = { it.id }) { m ->
-                        MessageBubble(msg = m)
-                        Spacer(Modifier.height(6.dp))
-                    }
-
-                    item(key = "bottom-pad") { Spacer(Modifier.height(4.dp)) }
-                }
-
-                /* Zone de saisie */
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message…") },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = ChipDark,
-                            focusedContainerColor = ChipDark,
-                            unfocusedBorderColor = DividerDark,
-                            focusedBorderColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Button(
-                        onClick = {
-                            val txt = draft.trim()
-                            if (txt.isNotEmpty()) {
-                                onSend(txt)
-                                draft = ""
-                            }
-                        },
-                        shape = RoundedCornerShape(24.dp)
-                    ) { Text("Envoyer") }
-                }
+                item(key = "trust") { TrustLine(verified) }
+                items(messages, key = { it.id }) { m -> Bubble(m) }
             }
-        }
-    }
-}
-
-/* ---------- Icône d’état du message ---------- */
-@Composable
-private fun MessageStatusIcon(status: MessageStatus, isMine: Boolean) {
-    val neutral = if (isMine) Color(0xFFE8ECFF) else Color(0xFFB7C0D0)
-    when (status) {
-        MessageStatus.SENDING -> {
-            CircularProgressIndicator(
-                modifier = Modifier.size(12.dp),
-                strokeWidth = 1.5.dp,
-                color = neutral
+            Composer(
+                draft = draft,
+                onDraft = { draft = it },
+                onSend = { onSend(draft.trim()); draft = "" },
+                onAttach = { showAttach = true }
             )
         }
-        MessageStatus.SENT -> androidx.compose.material3.Icon(
-            imageVector = Icons.Outlined.Check,
-            contentDescription = "Envoyé",
-            tint = neutral,
-            modifier = Modifier.size(14.dp)
-        )
-        MessageStatus.DELIVERED -> androidx.compose.material3.Icon(
-            imageVector = Icons.Outlined.DoneAll,
-            contentDescription = "Reçu",
-            tint = neutral,
-            modifier = Modifier.size(14.dp)
-        )
-        MessageStatus.READ -> androidx.compose.material3.Icon(
-            imageVector = Icons.Outlined.DoneAll,
-            contentDescription = "Lu",
-            tint = MaterialTheme.colorScheme.primary, // bleu pour “lu”
-            modifier = Modifier.size(14.dp)
-        )
+    }
+    if (showAttach) AttachSheet(onDismiss = { showAttach = false })
+}
+
+@Composable
+private fun ChatHeader(
+    title: String,
+    verified: Boolean,
+    ephemeral: EphemeralChoice,
+    onEphemeralChange: (EphemeralChoice) -> Unit,
+    onBack: () -> Unit
+) {
+    var menu by remember { mutableStateOf(false) }
+    Column {
+        Row(
+            Modifier.statusBarsPadding().fillMaxWidth().padding(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconAction(HarpoIcons.Back, "Retour", onBack)
+            Avatar(title, size = 40.dp, highlighted = verified)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    if (verified) Icon(HarpoIcons.ShieldCheck, "Contact vérifié", tint = Palette.Mint, modifier = Modifier.size(15.dp))
+                }
+                Text(
+                    if (ephemeral == EphemeralChoice.OFF) "Messages conservés" else "Messages éphémères · ${ephemeral.short}",
+                    style = MaterialTheme.typography.labelSmall, color = Palette.Muted
+                )
+            }
+            Box {
+                Row(
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button, onClickLabel = "Changer la durée des messages") { menu = true }
+                        .padding(vertical = 4.dp)
+                        .background(Palette.MintPanel, RoundedCornerShape(18.dp))
+                        .border(1.dp, Palette.MintPanelLine, RoundedCornerShape(18.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(HarpoIcons.Timer, null, tint = Palette.Mint, modifier = Modifier.size(15.dp))
+                    Text(ephemeral.short, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = Palette.Mint)
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = Palette.Sheet) {
+                    Text(
+                        "Durée de vie des messages",
+                        style = MaterialTheme.typography.labelMedium, color = Palette.Muted,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    EphemeralChoice.entries.forEach { c ->
+                        DropdownMenuItem(
+                            text = { Text(c.label) },
+                            trailingIcon = { if (c == ephemeral) Icon(HarpoIcons.Check, null, tint = Palette.Mint, modifier = Modifier.size(18.dp)) },
+                            onClick = { menu = false; onEphemeralChange(c) }
+                        )
+                    }
+                }
+            }
+        }
+        HorizontalDivider(color = Palette.Line)
     }
 }
 
-/* ---------- Bulle de message ---------- */
-@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-private fun MessageBubble(msg: ChatMsg) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val maxW = maxWidth * 0.72f     // ← largeur max ≈ 72% écran
-        val minW = maxWidth * 0.05f     // ← largeur min ≈ 5% écran
-        val bubbleColor = if (msg.isMine) BubbleMine else BubbleOther
-        val onBubble = if (msg.isMine) OnBubbleMine else OnBubbleOther
-
-        Surface(
-            modifier = Modifier
-                .widthIn(min = minW, max = maxW)                // ← borne la largeur
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .align(if (msg.isMine) CenterEnd else CenterStart),
-            shape = RoundedCornerShape(18.dp),
-            color = bubbleColor
-        ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+private fun TrustLine(verified: Boolean) {
+    Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
+        if (verified) {
+            Text("Contact vérifié en personne · chiffré de bout en bout", style = MaterialTheme.typography.labelSmall, color = Palette.Faint)
+        } else {
+            Row(
+                Modifier.background(Palette.AmberBg, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(HarpoIcons.Warning, null, tint = Palette.Amber, modifier = Modifier.size(16.dp))
                 Text(
-                    text = msg.text,
-                    color = onBubble,
-                    style = MaterialTheme.typography.bodyLarge
+                    "Contact non vérifié : comparez le code de contrôle en personne.",
+                    style = MaterialTheme.typography.labelSmall, color = Palette.Amber
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.End),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        formatTimeLabel(msg.time),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = onBubble.copy(alpha = 0.85f)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    MessageStatusIcon(status = msg.status, isMine = msg.isMine)
-                }
             }
         }
     }
 }
 
-/* ---------- Helpers ---------- */
-private fun formatTimeLabel(time: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
+@Composable
+private fun Bubble(m: ChatMsg) {
+    val shape = if (m.isMine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (m.isMine) Alignment.CenterEnd else Alignment.CenterStart) {
+        Column(
+            Modifier
+                .widthIn(max = 290.dp)
+                .background(if (m.isMine) Palette.MintBubble else Palette.Surface, shape)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(m.text, style = MaterialTheme.typography.bodyMedium, color = if (m.isMine) Palette.MintText.copy(alpha = 0.95f) else Palette.Text)
+            Text(
+                meta(m),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.92f),
+                color = if (m.isMine) Palette.MintBubbleMeta else Palette.Faint,
+                modifier = Modifier.align(Alignment.End)
+            )
+        }
+    }
+}
+
+private fun meta(m: ChatMsg): String {
+    val parts = mutableListOf(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(m.time)))
+    if (m.isMine) parts += m.status.label
+    m.expiresAt?.let { parts += "disparaît dans ${remaining(it - System.currentTimeMillis())}" }
+    return parts.joinToString(" · ")
+}
+
+private fun remaining(ms: Long): String {
+    val min = (ms / 60_000).coerceAtLeast(1)
+    return when {
+        min < 60 -> "$min min"
+        min < 48 * 60 -> "${min / 60} h"
+        else -> "${min / (24 * 60)} j"
+    }
+}
+
+@Composable
+private fun Composer(draft: String, onDraft: (String) -> Unit, onSend: () -> Unit, onAttach: () -> Unit) {
+    Column(Modifier.navigationBarsPadding()) {
+        HorizontalDivider(color = Palette.Line)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            RoundAction(HarpoIcons.Plus, "Joindre une photo, un message vocal ou un fichier", onAttach)
+            Box(
+                Modifier.weight(1f).heightIn(min = 44.dp).background(Palette.Surface, RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (draft.isEmpty()) Text("Message", style = MaterialTheme.typography.bodyMedium, color = Palette.Faint)
+                BasicTextField(
+                    value = draft,
+                    onValueChange = onDraft,
+                    maxLines = 5,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Palette.Text),
+                    cursorBrush = SolidColor(Palette.Mint),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (draft.isBlank()) {
+                RoundAction(HarpoIcons.Mic, "Message vocal", onAttach, filled = true)
+            } else {
+                RoundAction(HarpoIcons.Send, "Envoyer", onSend, filled = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoundAction(icon: ImageVector, description: String, onClick: () -> Unit, filled: Boolean = false) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(44.dp).background(if (filled) Palette.Mint else Palette.Surface, CircleShape)
+    ) {
+        Icon(icon, description, tint = if (filled) Palette.OnMint else Palette.Text, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Pièces jointes : annoncées, actives avec le lot « médias » (masquage, voix transformée). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Palette.Sheet) {
+        Column(Modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Joindre", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp))
+            AttachRow(HarpoIcons.Image, "Photo ou vidéo", "Visages masqués et position retirée avant l'envoi")
+            AttachRow(HarpoIcons.Mic, "Message vocal", "Voix transformée, impossible à reconnaître")
+            AttachRow(HarpoIcons.File, "Fichier", "Métadonnées retirées")
+            Text(
+                "Ces envois arrivent avec la prochaine version.",
+                style = MaterialTheme.typography.bodySmall, color = Palette.Faint, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttachRow(icon: ImageVector, title: String, hint: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(40.dp).background(Palette.Surface, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Palette.Mint, modifier = Modifier.size(20.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = Palette.Muted)
+        }
+        Chip("Bientôt", fg = Palette.Muted, bg = Palette.Surface)
+    }
+}

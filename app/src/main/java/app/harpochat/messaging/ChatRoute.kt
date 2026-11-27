@@ -5,11 +5,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.harpochat.data.EphemeralChoice
 import app.harpochat.security.Session
 import app.harpochat.ui.ChatScreen
 import kotlinx.coroutines.launch
 
-/** Conversation [threadId] : le titre vient de la base (plus jamais « Alice » en dur). */
+/** Conversation [threadId] : titre, vérification et durée éphémère viennent de la base. */
 @Composable
 fun ChatRoute(session: Session, threadId: String, onBack: () -> Unit) {
     val repo = session.repo
@@ -19,12 +20,14 @@ fun ChatRoute(session: Session, threadId: String, onBack: () -> Unit) {
     // Tout message affiché est lu.
     LaunchedEffect(threadId, messages.size) { repo.markThreadRead(threadId) }
 
-    val title = thread?.title ?: ""
     ChatScreen(
+        title = thread?.title.orEmpty(),
+        verified = thread?.verified == true,
+        ephemeral = EphemeralChoice.of(thread?.ephemeralSeconds ?: 0),
         messages = messages,
         // Envoi dans la portée de session : il survit à la navigation, pas au verrouillage.
         onSend = { text -> session.scope.launch { repo.sendLocal(threadId, text) } },
-        title = title,
+        onEphemeralChange = { c -> session.scope.launch { repo.setEphemeral(threadId, c.seconds) } },
         onBack = onBack
     )
 }
