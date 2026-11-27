@@ -72,13 +72,12 @@
 }
 
 # ---------------------------------------------------------------------------
-# Noyau réseau harpochat-core : bindings uniffi appelés par JNA (réflexion).
-# On garde les membres (noms de méthodes natives, champs des Structure) mais
-# pas les noms de classes, que R8 peut renommer : le paquet n'apparaît pas en clair.
+# Noyau réseau (bindings uniffi, package neutre org.corekit) appelés par JNA par réflexion :
+# noms de classes et de membres conservés.
 # ---------------------------------------------------------------------------
 -keep class com.sun.jna.** { *; }
 -keep class * implements com.sun.jna.** { *; }
--keepclassmembers class app.harpochat.core.** { *; }
+-keep class org.corekit.** { *; }
 -dontwarn java.awt.**
 
 # OkHttp (WebSocket)

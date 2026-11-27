@@ -3,13 +3,13 @@ package app.calc.scientific.net
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.harpochat.core.FfiFrameKind
-import app.harpochat.core.FfiMailboxKeys
-import app.harpochat.core.FfiSizeClass
-import app.harpochat.core.coreVersion
-import app.harpochat.core.decodeBootstrap
-import app.harpochat.core.encodeFrame
-import app.harpochat.core.sizes
+import org.corekit.FfiFrameKind
+import org.corekit.FfiMailboxKeys
+import org.corekit.FfiSizeClass
+import org.corekit.coreVersion
+import org.corekit.decodeBootstrap
+import org.corekit.encodeFrame
+import org.corekit.sizes
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
@@ -96,7 +96,7 @@ class CoreOnDeviceTest {
                 f
             }
             assertEquals(FfiFrameKind.DIRECTORY, frame?.kind)
-            val nodes = app.harpochat.core.verifyDirectory(frame!!.body, listOf(root.idPub), (System.currentTimeMillis() / 1000).toULong())
+            val nodes = org.corekit.verifyDirectory(frame!!.body, listOf(root.idPub), (System.currentTimeMillis() / 1000).toULong())
             assertTrue(nodes.any { it.idPub.contentEquals(root.idPub) })
         } finally {
             link.close()
