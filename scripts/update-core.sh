@@ -9,7 +9,7 @@
 # Télécharge `harpochat-core-android.zip` depuis les releases de Cronix2/HarpoChat_Serveur,
 # vérifie son SHA-256 contre `SHA256SUMS`, puis remplace :
 #   app/src/main/jniLibs/<abi>/*.so                              (bibliothèque native du noyau)
-#   app/src/main/java/app/harpochat/core/*.kt                    (bindings générés, ne pas modifier)
+#   app/src/main/java/<package des bindings>/*.kt                (bindings générés, ne pas modifier)
 #   app/src/androidTest/assets/core-vectors/v1.json                (vecteurs rejoués sur appareil)
 # et note la version dans app/core-version.txt.
 # Prérequis : gh (authentifié), unzip, sha256sum.
@@ -29,9 +29,11 @@ unzip -q "$WORK/harpochat-core-android.zip" -d "$WORK/x"
 
 rm -rf "$ROOT/app/src/main/jniLibs"
 cp -r "$WORK/x/jniLibs" "$ROOT/app/src/main/jniLibs"
-mkdir -p "$ROOT/app/src/main/java/app/harpochat/core" "$ROOT/app/src/androidTest/assets/core-vectors"
-rm -f "$ROOT/app/src/main/java/app/harpochat/core/"*.kt
-cp "$WORK/x/kotlin/app/harpochat/core/"*.kt "$ROOT/app/src/main/java/app/harpochat/core/"
+# Bindings : l'arborescence kotlin/ de l'archive (org/corekit/ depuis la v0.2.0) remplace les
+# anciennes, quel que soit leur package.
+rm -rf "$ROOT/app/src/main/java/app/harpochat" "$ROOT/app/src/main/java/org/corekit"
+cp -r "$WORK/x/kotlin/." "$ROOT/app/src/main/java/"
+mkdir -p "$ROOT/app/src/androidTest/assets/core-vectors"
 cp "$WORK/x/test-vectors/v1.json" "$ROOT/app/src/androidTest/assets/core-vectors/v1.json"
 
 NAME="$(gh release view "$TAG" -R "$REPO" --json name -q .name)"
