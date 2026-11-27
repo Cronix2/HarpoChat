@@ -1,7 +1,7 @@
 # `harpochat-core` v0.1 — guide d'intégration côté Android
 
 > **Pour :** l'équipe qui développe l'app Android HarpoChat.
-> **De :** l'équipe serveur. **Date :** 2026-11-26. **Version du noyau :** `0.1.0` (tag `core-v0.1.0` après fusion).
+> **De :** l'équipe serveur. **Date :** 2026-11-26. **Version du noyau :** celle de la release (page Releases : `latest`, ou `vX.Y.Z`).
 > **Contrat de référence :** `docs/SERVER_SPEC.md` v0.2. Les écarts proposés sont dans [`spec-deltas.md`](spec-deltas.md).
 
 ## 1. Ce qui change pour vous, en bref
@@ -118,6 +118,7 @@ Pile, de bas en haut : **TCP → TLS 1.3 → WebSocket (messages binaires unique
 | `DirectoryReq` (0x02) | téléphone → nœud | vide. |
 | `Directory` (0x03) | nœud → téléphone | CBOR `Signed<Directory>` → `directory::verify_directory`. |
 | `Padding` (0x00) | les deux | trafic de couverture du lien, à ignorer. |
+| `CoverRate` (0x09) | téléphone → nœud | `cover_rate_body(hz)` : débit descendant voulu (§8.1). |
 
 5. **Limite de débit :** 50 trames/s par lien, rafales de 200. Au-delà, le lien est fermé.
 6. **Rejets silencieux :** une PUT ou un FETCH mal signé, rejoué ou expiré ne reçoit **aucune**
@@ -152,11 +153,82 @@ Les chemins multi-nœuds arrivent en P5, sans changement de format.
 6. **Nœud injoignable :** retirez-le de votre vue et recalculez routes et répliques. Les autres
    répliques gardent le courrier.
 
+## 8. Temps réel et trafic de couverture (phase P6, implémentée)
+
+### 8.1 Ce que la gateway vous envoie : un débit constant
+
+La gateway ne vous envoie plus une trame dès qu'elle en a une. Elle émet à des instants tirés
+d'un **processus de Poisson** de débit λ. À chaque instant, elle envoie la prochaine trame réelle
+en attente (`Deliver`, `Directory`) ou, à défaut, une trame `Padding`. Un observateur du réseau
+voit donc le même flux de trames, que vous receviez du courrier ou non.
+
+- **Ignorez les trames `Padding`**, dans tous vos `recv`.
+- **Choisissez λ** avec la trame `CoverRate` : `encodeFrame(COVER_RATE, coverRateBody(hz), SMALL)`.
+  Envoyez-la **à chaque connexion**, juste après `RegisterInbox` (le réglage n'est pas mémorisé).
+  La gateway borne la valeur à sa configuration (par défaut entre 0,05 et 10 trames/s).
+  Une valeur malformée ferme le lien. Sans `CoverRate`, la gateway applique son défaut (1/s).
+- **Compromis à régler côté app** (spec §6.3). Une trame fait 2 Ko et une trame réelle attend en
+  moyenne 1/λ :
+
+| λ | Données descendantes | Latence ajoutée (moyenne) | Usage conseillé |
+|---|---|---|---|
+| 2 /s | ≈ 15 Mo/h | 0,5 s | conversation ouverte |
+| 1 /s | ≈ 7 Mo/h | 1 s | app au premier plan |
+| 0,1 /s | ≈ 0,7 Mo/h | 10 s | arrière-plan |
+| 0,05 /s | ≈ 0,35 Mo/h | 20 s | économie maximale |
+
+### 8.2 Ce que vous envoyez : votre propre couverture (spec §6.3)
+
+Le serveur ne peut pas masquer votre trafic montant : c'est à l'app de le faire.
+
+1. Émettez un paquet Sphinx à chaque instant d'un processus de Poisson de débit λ_up (spec §13 :
+   environ 1 toutes les 2 s app ouverte, moins en arrière-plan) : intervalle `-ln(1-u)/λ_up`.
+2. À chaque instant : si un vrai paquet attend (PUT, FETCH, ACK, SUBSCRIBE), envoyez-le, sinon un
+   leurre, moitié *drop*, moitié *loop* :
+   - **Drop** : `buildDrop()` le long de `forwardRoute(nodes, gw, replique, 100)` vers une réplique
+     prise au hasard (pas votre gateway). La mailbox le jette.
+   - **Loop** : `phoneLoopRoute(nodes, gw, 100)` puis
+     `buildLoopPacket(route.hops, inbox, loopId, route.delaysMs)`, avec `loopId` = 16 octets
+     aléatoires. Il revient en trame `Deliver` dont les 16 premiers octets valent `loopId`.
+3. **Pertes :** un loop non revenu après Σ`delaysMs` + 10 s est perdu. Comptez-le contre chaque
+   nœud de sa route (hors gateway). Un nœud qui perd plus de 75 % de vos loops, sur au moins
+   10 essais, est évité dans vos routes. Les nœuds font la même chose de leur côté. Ne publiez
+   rien : ces mesures restent dans l'app.
+4. Ne faites jamais partir un vrai paquet « tout de suite » en dehors du rythme : c'est ce rythme
+   qui rend vos envois indiscernables.
+
+### 8.3 Recevoir en temps réel : SUBSCRIBE → PUSH / NOTIFY (spec §7.5)
+
+1. **À chaque connexion** (votre `inbox` change, donc les anciens SURB ne mènent plus nulle part),
+   et pour chaque `mailbox_id` surveillé (époque courante, et la précédente pendant le
+   recouvrement), envoyez un `SUBSCRIBE` à **chaque réplique qui n'est pas votre gateway** :
+   `buildSubscribe(keys, surbs, until, now)`, avec 3 SURB par paquet `Small`
+   (`sizes(SMALL).maxSurbsPerSubscribe`). Chaque SURB est créé avec
+   `replyRoute(nodes, gw, replique, 100)`.
+2. **Le serveur garde au plus 32 SURB par boîte** (et 100 000 par nœud). `until` est ramené à
+   24 h au plus. Un `until <= now` **désabonne**. Les rejets sont silencieux.
+3. **À chaque PUT accepté**, la réplique consomme **un** SURB et vous envoie :
+   - `Push { mailboxId, blobs: [{ id, blob }] }` si le blob tient dans une réponse `Small` ;
+   - sinon `Notify { mailboxId, pending }` : faites un `FETCH`.
+4. **Réapprovisionnez** : après chaque push reçu, renvoyez un `SUBSCRIBE`. Il passe dans votre
+   rythme de couverture (§8.2).
+5. **Doublons :** chaque réplique pousse sa copie, avec **son propre** `id`. Dédupliquez sur le
+   contenu (le message chiffré de bout en bout), puis envoyez un `ACK` à **chaque** réplique avec
+   l'`id` qu'elle vous a donné. Le blob reste stocké jusqu'à l'ACK : un push perdu ne coûte que
+   de la latence.
+6. **Repli :** si aucun push n'arrive (stock épuisé, nœud redémarré), le `FETCH` périodique
+   (§7) prend le relais.
+
+Latence mesurée en test (5 nœuds, liens à 50 /s, téléphone à 20 /s) : **moins de 2 s** entre
+la PUT et le PUSH. Avec λ = 1 /s, comptez environ 1 s de plus.
+
 ## 5. Ce qui arrive ensuite
 
 | Phase | Pour vous |
 |---|---|
-| P2 — `core-v0.2.0` | **Fait** : voir [`gradle-integration.md`](gradle-integration.md). |
+| P2 | **Fait** : voir [`gradle-integration.md`](gradle-integration.md). |
 | P4 | **Fait** : voir §6. Premier serveur joignable (`harpochat-server run`). |
 | P5 | **Fait** : voir §7. |
-| P6 | SUBSCRIBE / PUSH en temps réel, trafic de couverture. |
+| P6 | **Fait** : voir §8. Trames `Padding` à ignorer, `CoverRate`, SUBSCRIBE / PUSH, loops. |
+| P7 | **Fait**, rien à changer côté app : les annuaires listent aussi les nœuds parrainés, avec leur chaîne de `Vouch`. `verifyDirectory` vérifie les chaînes jusqu'aux racines embarquées, les révocations et la limite de 3 parrainages par 30 jours. Le champ `sponsor` de `FfiNode` sert déjà à la diversité des chemins. |
+| P8 | **Fait**. Un point à respecter : la **clé Sphinx de chaque nœud change tous les 7 jours** (l'ancienne reste acceptée 7 jours de plus) et un descripteur expire après 24 h. Rafraîchissez l'annuaire au moins une fois par jour, et à chaque reconnexion, avant de construire routes et SURB. Un paquet construit pour une clé vieille de plus de deux semaines est jeté sans réponse. |

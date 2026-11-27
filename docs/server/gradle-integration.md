@@ -6,9 +6,12 @@
 
 ## 1. Ce qui est livré
 
-Le workflow GitHub **Android core** (`.github/workflows/android.yml`) produit
-`harpochat-core-android.zip` : en artefact sur chaque PR, et en asset de release sur chaque tag
-`core-v*`. Contenu de l'archive :
+`harpochat-core-android.zip` est publié sur la page
+[Releases](https://github.com/Cronix2/HarpoChat_Serveur/releases), avec les binaires du serveur :
+dans la pré-release **`latest`**, reconstruite à chaque modification de `main`, et dans chaque
+version numérotée **`vX.Y.Z`**. Prenez une version numérotée pour une build de l'app, `latest` pour
+suivre le développement. Sur une PR, le workflow **Android core** fournit aussi l'archive en
+artefact. Contenu de l'archive :
 
 ```text
 jniLibs/arm64-v8a/libharpochat_core_ffi.so
@@ -64,11 +67,14 @@ val t = session.transport
 
 fun send(kind: FfiFrameKind, body: ByteArray) =
     ws.send(t.encrypt(encodeFrame(kind, body, FfiSizeClass.SMALL)).toByteString())
-fun receive(bytes: ByteArray): FfiFrame = decodeFrame(t.decrypt(bytes))
+fun receive(bytes: ByteArray): FfiFrame? =
+    decodeFrame(t.decrypt(bytes)).takeIf { it.kind != FfiFrameKind.PADDING }   // padding : ignorer
 
-// 3. Boîte de réception de cette connexion (jeton neuf à chaque connexion).
+// 3. Boîte de réception de cette connexion (jeton neuf à chaque connexion),
+//    puis débit descendant voulu (P6) : 1 trame/s au premier plan, 0,05 à 0,1 en arrière-plan.
 val inbox = randomBytes(32u)
 send(FfiFrameKind.REGISTER_INBOX, inbox)
+send(FfiFrameKind.COVER_RATE, coverRateBody(1.0))
 
 // 4. Annuaire : DIRECTORY_REQ → DIRECTORY, vérifié contre les racines du bloc d'amorçage.
 val nodes = verifyDirectory(directoryFrame.body, roots, nowSecs)   // List<FfiNode>
@@ -92,9 +98,11 @@ when (reply) {
 }
 ```
 
-En M1, la route n'a qu'un saut (`listOf(hop)`). Dès P5, ce sera
-`gateway → mix → mailbox` pour l'aller et `mix → gateway` pour les SURB, avec la même API : seules
-les listes changent.
+Ce parcours n'utilise qu'un nœud (`listOf(hop)`), comme le test de référence. Sur un vrai mesh,
+les listes viennent de `forwardRoute` / `replyRoute` (voir `core-integration.md` §7). Le temps réel
+(`buildSubscribe`, trames `Push` / `Notify`) et la couverture montante (`buildDrop`,
+`phoneLoopRoute` + `buildLoopPacket`) sont décrits au §8. Le test `phone_is_pushed_through_ffi_only`
+exécute SUBSCRIBE → PUT → PUSH avec la seule API FFI.
 
 ## 4. Erreurs
 

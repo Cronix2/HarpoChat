@@ -70,3 +70,19 @@
     public static int d(...);
     public static int i(...);
 }
+
+# ---------------------------------------------------------------------------
+# Noyau réseau harpochat-core : bindings uniffi appelés par JNA (réflexion).
+# On garde les membres (noms de méthodes natives, champs des Structure) mais
+# pas les noms de classes, que R8 peut renommer : le paquet n'apparaît pas en clair.
+# ---------------------------------------------------------------------------
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keepclassmembers class app.harpochat.core.** { *; }
+-dontwarn java.awt.**
+
+# OkHttp (WebSocket)
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

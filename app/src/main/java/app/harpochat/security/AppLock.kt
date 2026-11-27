@@ -4,6 +4,7 @@ package app.harpochat.security
 import android.content.Context
 import app.harpochat.data.AppDatabase
 import app.harpochat.data.ChatRepository
+import app.harpochat.net.MeshClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +25,11 @@ class Session internal constructor(
 ) {
     val repo = ChatRepository(db, scope).also { it.startExpiryJob() }
 
+    /** Lien au mesh : ouvert seulement pendant la session, coupé au verrouillage. */
+    val mesh = MeshClient(scope).also { it.start() }
+
     internal fun close() {
+        mesh.stop()
         scope.cancel()
         db.close()
         dbKey.fill(0) // la clé ne survit pas au verrouillage

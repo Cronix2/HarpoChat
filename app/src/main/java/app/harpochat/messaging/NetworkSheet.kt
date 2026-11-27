@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.harpochat.data.NetworkStatus
 import app.harpochat.security.ProtectionLevel
 import app.harpochat.security.Session
@@ -47,8 +48,10 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () -> Unit, status: NetworkStatus = NetworkStatus.Simulated) {
+fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () -> Unit) {
     val fingerprint by produceState("…") { value = withContext(Dispatchers.IO) { session.repo.fingerprint() } }
+    val status by session.mesh.status.collectAsStateWithLifecycle()
+    val online = status.phase == NetworkStatus.Phase.ONLINE
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -64,16 +67,34 @@ fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () ->
                 Text("Le trajet suivi par chacun de vos messages.", style = MaterialTheme.typography.bodyMedium, color = Palette.Muted)
             }
 
-            Route(listOf("Vous") + status.hops + listOf("Contact"))
+            Route(listOf("Vous") + status.hops.ifEmpty { listOf("Réseau") } + listOf("Contact"))
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Stat("Relais actifs", "${status.activeRelays} sur ${status.totalRelays}", Modifier.weight(1f))
-                    Stat("Délai moyen", "%.1f s".format(status.meanDelayMs / 1000f).replace('.', ','), Modifier.weight(1f))
+                    Stat(
+                        "Relais actifs",
+                        if (online && status.totalRelays > 0) "${status.activeRelays} sur ${status.totalRelays}" else "—",
+                        Modifier.weight(1f), warn = online && status.totalRelays > 0 && !status.anonymous
+                    )
+                    Stat(
+                        "Aller-retour mesuré",
+                        status.loopRttMs?.let { "%.1f s".format(it / 1000f).replace('.', ',') } ?: if (online) "Mesure…" else "—",
+                        Modifier.weight(1f)
+                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Stat("Trafic leurre", if (status.coverTraffic) "Actif" else "Inactif", Modifier.weight(1f), accent = status.coverTraffic)
+                    Stat("Trafic leurre", if (online && status.coverTraffic) "Actif" else "Inactif", Modifier.weight(1f), accent = online && status.coverTraffic)
                     Stat("Clé protégée par", protection.short, Modifier.weight(1f), accent = protection.hardware, warn = !protection.hardware)
+                }
+                if (online) {
+                    Text(
+                        buildString {
+                            append("Entrée ").append(status.gateway ?: "—")
+                            append(" · leurres revenus ").append(status.loopsReturned).append(" sur ").append(status.loopsSent)
+                            if (status.loopsLost > 0) append(" · ").append(status.loopsLost).append(" perdu").append(if (status.loopsLost > 1) "s" else "")
+                        },
+                        fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Palette.Faint
+                    )
                 }
             }
 
@@ -90,17 +111,25 @@ fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () ->
                 "Les serveurs ne voient que des paquets chiffrés de taille identique, mêlés à du trafic leurre : ni le contenu, ni l'expéditeur, ni le destinataire.",
                 style = MaterialTheme.typography.bodySmall, color = Palette.Muted
             )
-            if (status.simulated) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(HarpoIcons.Info, null, tint = Palette.Amber, modifier = Modifier.size(16.dp))
-                    Text(
-                        "Valeurs simulées : le réseau HarpoChat n'est pas encore branché sur cette version.",
-                        style = MaterialTheme.typography.bodySmall, color = Palette.Amber
-                    )
-                }
+            when {
+                status.phase == NetworkStatus.Phase.OFFLINE ->
+                    Notice("Hors ligne : ${status.error ?: "nœud injoignable"}. Nouvel essai automatique.", Palette.Amber)
+                status.phase == NetworkStatus.Phase.CONNECTING ->
+                    Notice("Connexion au réseau…" + (status.error?.let { " Dernier échec : $it." } ?: ""), Palette.Muted)
+                online && status.totalRelays > 0 && !status.anonymous ->
+                    Notice("Réseau de test : moins de 3 nœuds. Sans relais intermédiaire, le nœud d'entrée sait à quelle boîte vous écrivez.", Palette.Amber)
             }
+            Notice("Les messages passeront par ce réseau à la prochaine étape. Pour l'instant, le lien mesure le trajet et émet le trafic leurre.", Palette.Muted)
             SecondaryButton("Fermer", onDismiss, Modifier.fillMaxWidth())
         }
+    }
+}
+
+@Composable
+private fun Notice(text: String, color: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+        Icon(HarpoIcons.Info, null, tint = color, modifier = Modifier.padding(top = 1.dp).size(16.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = color)
     }
 }
 

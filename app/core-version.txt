@@ -1,0 +1,3 @@
+tag: latest
+release: harpochat — dernière version de main (03888fe)
+sha256: 1cb1427fbb7fc810e2599f8bafbad7dd52701a70bb7c9313a37d5d9c30ed6cfb

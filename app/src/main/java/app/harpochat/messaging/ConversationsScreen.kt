@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.harpochat.data.EphemeralChoice
+import app.harpochat.data.NetworkStatus
 import app.harpochat.data.SENDER_ME
 import app.harpochat.data.ThreadSummary
 import app.harpochat.security.ProtectionLevel
@@ -71,6 +72,7 @@ fun ConversationsScreen(
     val threads by session.repo.summaries().collectAsStateWithLifecycle(initialValue = emptyList())
     var query by rememberSaveable { mutableStateOf("") }
     var showNetwork by remember { mutableStateOf(false) }
+    val net by session.mesh.status.collectAsStateWithLifecycle()
     val shown = remember(threads, query) {
         if (query.isBlank()) threads
         else threads.filter { it.title.contains(query, true) || it.lastBody.orEmpty().contains(query, true) }
@@ -82,7 +84,7 @@ fun ConversationsScreen(
             contentPadding = PaddingValues(bottom = 120.dp)
         ) {
             item(key = "header") {
-                Header(query, { query = it }, onLock, onOpenSettings, onNetwork = { showNetwork = true })
+                Header(query, { query = it }, net, onLock, onOpenSettings, onNetwork = { showNetwork = true })
             }
             if (threads.isEmpty()) {
                 item(key = "empty") { EmptyState() }
@@ -119,6 +121,7 @@ fun ConversationsScreen(
 private fun Header(
     query: String,
     onQuery: (String) -> Unit,
+    net: NetworkStatus,
     onLock: () -> Unit,
     onSettings: () -> Unit,
     onNetwork: () -> Unit
@@ -140,9 +143,10 @@ private fun Header(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(Modifier.size(7.dp).background(Palette.Mint, CircleShape))
-            Text("Chiffré de bout en bout · 5 relais", style = MaterialTheme.typography.bodySmall, color = Palette.Mint)
-            Icon(HarpoIcons.ChevronRight, null, tint = Palette.Mint, modifier = Modifier.size(14.dp))
+            val (label, tint) = networkSummary(net)
+            Box(Modifier.size(7.dp).background(tint, CircleShape))
+            Text(label, style = MaterialTheme.typography.bodySmall, color = tint)
+            Icon(HarpoIcons.ChevronRight, null, tint = tint, modifier = Modifier.size(14.dp))
         }
         NoKeyboardLearning {
             Row(
@@ -245,4 +249,16 @@ internal fun shortTime(epochMs: Long): String {
         today.minusDays(1) -> "Hier"
         else -> if (d.isAfter(today.minusDays(7))) date.format(dayFmt).replaceFirstChar { it.uppercase() } else date.format(dateFmt)
     }
+}
+
+/** Résumé d'une ligne de l'état du réseau, et sa couleur. */
+internal fun networkSummary(net: NetworkStatus): Pair<String, Color> = when (net.phase) {
+    NetworkStatus.Phase.ONLINE -> when {
+        net.totalRelays == 0 -> "Connecté · annuaire en cours" to Palette.Mint
+        net.anonymous -> "Réseau anonyme · ${net.activeRelays} relais" to Palette.Mint
+        else -> "Réseau de test · ${net.totalRelays} nœud${if (net.totalRelays > 1) "s" else ""}" to Palette.Amber
+    }
+    NetworkStatus.Phase.CONNECTING -> "Connexion au réseau…" to Palette.Muted
+    NetworkStatus.Phase.OFFLINE -> "Hors ligne · nouvel essai automatique" to Palette.Amber
+    NetworkStatus.Phase.STOPPED -> "Réseau arrêté" to Palette.Muted
 }
