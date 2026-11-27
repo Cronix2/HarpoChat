@@ -116,6 +116,16 @@ To build and run **HarpoChat** you will need:
 - **Android SDK** – `compileSdk` is 36 and `minSdk` is 26.
 - A device or emulator running **Android 8.0 (API 26)** or higher.
 
+### 📲 Download
+
+Every merge into `main` publishes a new signed APK in the [GitHub Releases](https://github.com/Cronix2/HarpoChat/releases) (`calculator-v1.0.N.apk`), with its SHA-256 checksum. Check it before installing:
+
+```sh
+sha256sum -c calculator-v1.0.N.apk.sha256
+```
+
+The app is distributed outside the Play Store: allow installation from your browser or file manager when Android asks.
+
 ### ⚙️ Installation
 
 Clone the repository and build the app:
