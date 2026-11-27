@@ -24,6 +24,11 @@ on:
       - 'gradle.properties'
       - '.github/workflows/release.yml'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publier la release (décocher pour un simple essai)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -74,16 +79,35 @@ jobs:
 
       - name: Vérifier la signature et préparer les fichiers
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1)
-          if [ -z "$APK" ]; then echo "::error::APK signé introuvable"; ls -la app/build/outputs/apk/release; exit 1; fi
-          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)
-          "$APKSIGNER" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          set -o pipefail
+          ls -la app/build/outputs/apk/release/
+          APK=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1 || true)
+          if [ -z "$APK" ]; then echo "::error::APK signé introuvable"; exit 1; fi
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
+          echo "APK : $APK"
+          echo "apksigner : ${BT}apksigner"
+          if ! "${BT}apksigner" verify --verbose --print-certs "$APK" > certs.txt 2>&1; then
+            cat certs.txt
+            echo "::error::La signature de l'APK n'est pas valide"
+            exit 1
+          fi
+          grep -E "Verified using|certificate (DN|SHA-256)" certs.txt || cat certs.txt
           OUT="calculator-v${VERSION_NAME}.apk"
           cp "$APK" "$OUT"
           sha256sum "$OUT" > "$OUT.sha256"
           echo "APK_OUT=$OUT" >> "$GITHUB_ENV"
 
+      - name: Garder l'APK (essai sans publication)
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-essai
+          path: |
+            ${{ env.APK_OUT }}
+            ${{ env.APK_OUT }}.sha256
+
       - name: Publier la release
+        if: github.event_name == 'push' || inputs.publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}
