@@ -1,28 +1,59 @@
 # SPDX-License-Identifier: MIT
 #
-# Publication automatique : pousser un tag `v1.2.3` construit, teste, signe
-# et publie l'APK dans une GitHub Release.
+# Release automatique de l'APK.
 #
-# Secrets attendus (Settings > Secrets and variables > Actions) :
+# - Chaque fusion sur `main` qui touche l'application publie une nouvelle version
+#   (v1.0.<numéro d'exécution>) dans les GitHub Releases : APK signé + empreinte SHA-256.
+# - Lancement manuel possible depuis l'onglet Actions (« Run workflow »).
+#
+# Secrets requis (Settings > Secrets and variables > Actions) :
 #   RELEASE_KEYSTORE_BASE64   keystore .jks encodé en base64
 #   RELEASE_KEYSTORE_PASSWORD mot de passe du keystore
 #   RELEASE_KEY_ALIAS         alias de la clé
 #   RELEASE_KEY_PASSWORD      mot de passe de la clé
-# Sans ces secrets, l'APK de release est publié NON signé (installable après signature manuelle).
+# Toujours la MÊME clé : sinon les téléphones refusent d'installer la mise à jour.
 name: Release APK
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Vérifier les secrets de signature
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASS" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASS" ]; then
+            echo "::error::Secrets de signature manquants : un APK non signé ne s'installe pas. Ajoutez RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS et RELEASE_KEY_PASSWORD."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -34,26 +65,20 @@ jobs:
       - name: Tests unitaires
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
-      - name: Préparer la signature
-        env:
-          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          fi
-
-      - name: Build release
+      - name: Build de l'APK de release (minifié, signé)
         env:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Nommer l'APK et calculer l'empreinte
+      - name: Vérifier la signature et préparer les fichiers
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -n1)
-          OUT="calculator-${GITHUB_REF_NAME}.apk"
+          APK=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1)
+          if [ -z "$APK" ]; then echo "::error::APK signé introuvable"; ls -la app/build/outputs/apk/release; exit 1; fi
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)
+          "$APKSIGNER" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          OUT="calculator-v${VERSION_NAME}.apk"
           cp "$APK" "$OUT"
           sha256sum "$OUT" > "$OUT.sha256"
           echo "APK_OUT=$OUT" >> "$GITHUB_ENV"
@@ -61,7 +86,13 @@ jobs:
       - name: Publier la release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION_NAME }}
+          target_commitish: ${{ github.sha }}
+          name: Version ${{ env.VERSION_NAME }}
+          generate_release_notes: true
+          body: |
+            APK signé, prêt à installer. Vérifiez l'empreinte SHA-256 avant l'installation :
+            `sha256sum ${{ env.APK_OUT }}` doit afficher la valeur du fichier `.sha256`.
           files: |
             ${{ env.APK_OUT }}
             ${{ env.APK_OUT }}.sha256
-          generate_release_notes: true
