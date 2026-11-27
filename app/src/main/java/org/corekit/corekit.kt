@@ -3,7 +3,7 @@
 
 @file:Suppress("NAME_SHADOWING")
 
-package app.harpochat.core
+package org.corekit
 
 // Common helper code.
 //
@@ -3334,7 +3334,7 @@ sealed class FfiMessage {
         /**
          * Blobs.
          */
-        val `blobs`: List<app.harpochat.core.FfiBlob>, 
+        val `blobs`: List<org.corekit.FfiBlob>, 
         /**
          * More are waiting.
          */
@@ -3357,7 +3357,7 @@ sealed class FfiMessage {
         /**
          * Blobs.
          */
-        val `blobs`: List<app.harpochat.core.FfiBlob>) : FfiMessage()
+        val `blobs`: List<org.corekit.FfiBlob>) : FfiMessage()
         
     {
         

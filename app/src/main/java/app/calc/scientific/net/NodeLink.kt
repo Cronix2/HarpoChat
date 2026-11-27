@@ -2,13 +2,13 @@
 package app.calc.scientific.net
 
 import android.annotation.SuppressLint
-import app.harpochat.core.FfiFrame
-import app.harpochat.core.FfiFrameKind
-import app.harpochat.core.FfiHandshake
-import app.harpochat.core.FfiSizeClass
-import app.harpochat.core.FfiTransport
-import app.harpochat.core.decodeFrame
-import app.harpochat.core.encodeFrame
+import org.corekit.FfiFrame
+import org.corekit.FfiFrameKind
+import org.corekit.FfiHandshake
+import org.corekit.FfiSizeClass
+import org.corekit.FfiTransport
+import org.corekit.decodeFrame
+import org.corekit.encodeFrame
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient

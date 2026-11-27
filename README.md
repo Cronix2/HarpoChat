@@ -98,7 +98,7 @@ app/src/main/java/app/calc/scientific/   # neutral package name (same as the app
 ├── link/                  # Signed invitation format (transitional, replaced by harpochat-core)
 ├── net/                   # Mesh link: trust roots, TLS + Noise link, cover traffic, loops
 └── ui/                    # Theme, chat components, privacy helpers
-app/src/main/java/app/harpochat/core/   # generated bindings of the shared Rust core (scripts/update-core.sh)
+app/src/main/java/org/corekit/          # generated bindings of the shared Rust core (scripts/update-core.sh)
 docs/
 ├── SERVER_SPEC.md         # Client ↔ server contract (zero-knowledge mesh)
 ├── server/              # Integration notes from the server team

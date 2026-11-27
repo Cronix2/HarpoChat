@@ -2,8 +2,8 @@
 package app.calc.scientific.net
 
 import app.calc.scientific.BuildConfig
-import app.harpochat.core.FfiRoot
-import app.harpochat.core.decodeBootstrap
+import org.corekit.FfiRoot
+import org.corekit.decodeBootstrap
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -37,6 +37,6 @@ object Roots {
         return out
     }
 
-    /** Racines de cette build. Lève une [app.harpochat.core.FfiException] si le bloc est invalide. */
+    /** Racines de cette build. Lève une [org.corekit.FfiException] si le bloc est invalide. */
     fun load(): List<FfiRoot> = decodeBootstrap(reveal(BuildConfig.LAYOUT_TABLE))
 }

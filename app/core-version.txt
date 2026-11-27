@@ -1,3 +1,3 @@
 tag: latest
-release: harpochat — dernière version de main (cccd2ef)
-sha256: 7d2ff271ef428fa63bf80e03ac8161c9350b44f9e4d876ceafbfc37523462b89
+release: harpochat — dernière version de main (63250c0)
+sha256: 4a966b879dbc700c7398dded92adcbced7c5b905f9cc99cbd860b1699788c947
