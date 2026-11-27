@@ -57,7 +57,7 @@
 # ---------------------------------------------------------------------------
 # Reflection safety nets for data classes accessed via JSON
 # ---------------------------------------------------------------------------
--keepclassmembers class app.harpochat.link.Invite { *; }
+-keepclassmembers class app.calc.scientific.link.Invite { *; }
 
 # ---------------------------------------------------------------------------
 # Discrétion : regroupe les classes non conservées à la racine (les noms de

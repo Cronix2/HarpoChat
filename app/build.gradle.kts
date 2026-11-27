@@ -73,7 +73,7 @@ fun obscured(spec: String): String {
 }
 
 android {
-    namespace = "app.harpochat"
+    namespace = "app.calc.scientific"
     compileSdk = 36
 
     defaultConfig {
