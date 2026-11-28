@@ -284,8 +284,11 @@ internal class Mailboxes(private val inbound: suspend (box: ByteArray, blob: Byt
         val FETCH_MAX: UShort = 16u
         const val FETCH_SURBS = 3
         const val FETCH_SURB_TTL_MS = 120_000L
-        /** Durée d'un abonnement (le serveur la plafonne à 24 h). */
-        val SUBSCRIBE_SECS: ULong = 6uL * 3600uL
+        /**
+         * Durée d'un abonnement : 30 min, renouvelé toutes les 15 min. Des abonnements courts
+         * limitent les SURB morts (anciennes connexions) dans la réserve des répliques.
+         */
+        val SUBSCRIBE_SECS: ULong = 30uL * 60uL
         /** Réabonnement et relève périodiques, au cas où un nœud aurait redémarré (SURB perdus). */
         const val REFRESH_MS = 15 * 60 * 1000L
     }

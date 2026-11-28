@@ -19,6 +19,8 @@ class LoopTracker(private val graceMs: Long = 10_000, private val window: Int = 
     private val attempts = HashMap<String, Int>()
     private val losses = HashMap<String, Int>()
     private val rtts = ArrayDeque<Long>()
+    /** Loops déclarés perdus récemment : s'ils reviennent malgré tout, on les reconnaît. */
+    private val lateIds = LinkedHashSet<String>()
 
     var sent = 0; private set
     var returned = 0; private set
@@ -33,6 +35,7 @@ class LoopTracker(private val graceMs: Long = 10_000, private val window: Int = 
     /** @return true si [loopId] était un loop en attente (sinon la trame est autre chose). */
     @Synchronized
     fun onReturned(loopId: String, now: Long): Boolean {
+        if (lateIds.remove(loopId)) return true // revenu après son échéance : reste compté perdu
         val p = pending.remove(loopId) ?: return false
         returned++
         rtts.addLast(now - p.sentAt)
@@ -47,6 +50,8 @@ class LoopTracker(private val graceMs: Long = 10_000, private val window: Int = 
         val late = pending.filterValues { it.deadline <= now }
         late.forEach { (id, p) ->
             pending.remove(id)
+            lateIds.add(id)
+            while (lateIds.size > 256) lateIds.remove(lateIds.first())
             lost++
             p.nodes.forEach {
                 attempts[it] = (attempts[it] ?: 0) + 1

@@ -44,7 +44,11 @@ Notification permanente du service : canal « Calculs en cours », importance mi
 
 - **Redémarrage du téléphone** : le service ne revient qu'à la prochaine ouverture de l'app, pour ne pas demander la permission de démarrage automatique.
 - **Mode Doze** : sur certains téléphones, la réception peut être retardée en veille profonde. Une exclusion de l'optimisation de batterie pourra être proposée.
-- **Temps réel** : les PUSH du mesh multi-sauts arrivent avec un identifiant de SURB inattendu. Le problème est signalé à l'équipe serveur et en cours d'analyse. En attendant, le courrier arrive par la relève : à la connexion du lien, puis toutes les 15 minutes.
+- **Temps réel** : deux causes de PUSH perdus ont été trouvées avec l'équipe serveur.
+  - **Côté serveur (écart E23)** : après une reconnexion, la réplique utilisait d'abord les SURB les plus anciens, qui menaient à un inbox mort. Elle utilise désormais les plus récents. Le correctif est en cours de déploiement sur le Pi.
+  - **Côté app** : en arrière-plan, la gateway n'émet qu'une trame toutes les 10 s en moyenne. Un loop revenait donc souvent après son échéance, et était pris pour une réponse inconnue. Le délai de grâce suit maintenant le débit descendant (18 s au premier plan, 90 s en arrière-plan).
+  - Les abonnements durent 30 minutes et sont renouvelés toutes les 15 minutes.
+  - En attendant le déploiement serveur, le courrier arrive aussi par la relève : à la connexion, puis toutes les 15 minutes.
 
 ## Vérification (émulateur, mesh de 3 nœuds harpo, harpo2 et harpo3)
 

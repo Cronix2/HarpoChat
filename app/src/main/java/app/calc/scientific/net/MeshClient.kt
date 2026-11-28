@@ -61,7 +61,11 @@ class MeshClient(
     val status: StateFlow<NetworkStatus> = _status.asStateFlow()
 
     private val rnd = SecureRandom()
-    private val loops = LoopTracker()
+    /**
+     * Un loop revient par la gateway, qui n'émet qu'au débit demandé : on lui laisse, en plus
+     * des 10 s prévues, 8 intervalles moyens de ce débit (18 s au premier plan, 90 s en arrière-plan).
+     */
+    private val loops = LoopTracker(graceMs = 10_000L + (8_000 / downRateHz).toLong())
     private var job: Job? = null
     @Volatile private var link: NodeLink? = null
     @Volatile private var view: List<FfiNode>? = null
