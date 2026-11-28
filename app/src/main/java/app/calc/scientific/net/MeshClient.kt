@@ -48,8 +48,15 @@ import kotlin.math.min
  */
 class MeshClient(
     private val scope: CoroutineScope,
-    private val rootsProvider: () -> List<FfiRoot> = Roots::load
+    private val rootsProvider: () -> List<FfiRoot> = Roots::load,
+    /** Débit descendant constant demandé à la gateway (trame CoverRate). */
+    private val downRateHz: Double = CoverSchedule.DOWN_RATE_FOREGROUND_HZ,
+    /** Débit du trafic montant (vrais paquets et leurres). */
+    private val upRateHz: Double = CoverSchedule.UP_RATE_FOREGROUND_HZ
 ) {
+    /** Silence au-delà duquel le lien est jugé mort : 8 intervalles moyens, 20 s au moins. */
+    private val silenceLimitMs = maxOf(20_000L, (8_000 / downRateHz).toLong())
+
     private val _status = MutableStateFlow(NetworkStatus.Stopped)
     val status: StateFlow<NetworkStatus> = _status.asStateFlow()
 
@@ -137,9 +144,10 @@ class MeshClient(
     }
 
     private suspend fun runLink(l: NodeLink, rootIds: List<ByteArray>): Nothing = coroutineScope {
+        Log.d(TAG, "lien établi vers ${l.endpoint}, débits $downRateHz / $upRateHz")
         val inbox = randomBytes(32u)
         l.send(FfiFrameKind.REGISTER_INBOX, inbox)
-        l.send(FfiFrameKind.COVER_RATE, coverRateBody(CoverSchedule.DOWN_RATE_FOREGROUND_HZ))
+        l.send(FfiFrameKind.COVER_RATE, coverRateBody(downRateHz))
         l.send(FfiFrameKind.DIRECTORY_REQ, ByteArray(0))
         directoryAt = System.currentTimeMillis()
         publish(l)
@@ -181,7 +189,7 @@ class MeshClient(
     /** Trafic montant : un paquet à chaque instant d'un processus de Poisson. */
     private suspend fun uplink(l: NodeLink, inbox: ByteArray) {
         while (true) {
-            delay(CoverSchedule.nextDelayMs(CoverSchedule.UP_RATE_FOREGROUND_HZ, rnd.nextDouble()))
+            delay(CoverSchedule.nextDelayMs(upRateHz, rnd.nextDouble()))
             if (directoryWanted) {
                 directoryWanted = false
                 l.send(FfiFrameKind.DIRECTORY_REQ, ByteArray(0))
@@ -205,7 +213,7 @@ class MeshClient(
         while (true) {
             delay(WATCHDOG_MS)
             val now = System.currentTimeMillis()
-            if (now - l.lastRxAt > SILENCE_LIMIT_MS) throw LinkException("le nœud ne répond plus")
+            if (now - l.lastRxAt > silenceLimitMs) throw LinkException("le nœud ne répond plus")
             loops.expire(now)
             mailboxes.tick(now)
             if (now - directoryAt > DIRECTORY_REFRESH_MS) { directoryWanted = true; directoryAt = now }
@@ -257,8 +265,12 @@ class MeshClient(
     private fun publish(l: NodeLink) {
         val nodes = view.orEmpty()
         val bad = loops.suspects()
-        val active = nodes.count { it.idPub.hex() !in bad }
-        val anonymous = active >= 3
+        val alive = nodes.filter { it.idPub.hex() !in bad }
+        val active = alive.size
+        // Plusieurs sauts dès 3 nœuds. Anonymat réel seulement si les nœuds relèvent d'au moins
+        // deux opérateurs (racines de parrainage distinctes) : sinon un seul opérateur voit tout.
+        val multiHop = active >= 3
+        val anonymous = multiHop && operators(alive) >= 2
         _status.value = NetworkStatus(
             phase = Phase.ONLINE,
             totalRelays = nodes.size,
@@ -270,13 +282,25 @@ class MeshClient(
             coverTraffic = true,
             hops = when {
                 nodes.isEmpty() -> emptyList()
-                !anonymous -> listOf("Nœud")
+                !multiHop -> listOf("Nœud")
                 active >= 12 -> listOf("Entrée", "Relais ×3", "Boîte")
                 else -> listOf("Entrée", "Relais", "Boîte")
             },
+            multiHop = multiHop,
             anonymous = anonymous,
             gateway = l.nodeId.hex().take(8)
         )
+    }
+
+    /** Nombre d'opérateurs distincts : la racine au bout de la chaîne de parrainage de chaque nœud. */
+    private fun operators(nodes: List<FfiNode>): Int {
+        val sponsorOf = nodes.associate { it.idPub.hex() to it.sponsor?.hex() }
+        return nodes.map { n ->
+            var id = n.idPub.hex()
+            var guard = 0
+            while (guard++ < 16) id = sponsorOf[id] ?: break
+            id
+        }.toSet().size
     }
 
     private fun backoffMs(attempt: Int): Long {
@@ -290,8 +314,6 @@ class MeshClient(
         const val TAG = "calc.net"
         const val MEAN_DELAY_MS = 100uL
         const val WATCHDOG_MS = 5_000L
-        /** La gateway émet au moins à 1 trame/s demandée : 20 s de silence, c'est un lien mort. */
-        const val SILENCE_LIMIT_MS = 20_000L
         /** Descripteurs valables 24 h, clés Sphinx tournantes : on rafraîchit bien avant. */
         const val DIRECTORY_REFRESH_MS = 60 * 60 * 1000L
         const val MAX_BACKOFF_MS = 60_000L

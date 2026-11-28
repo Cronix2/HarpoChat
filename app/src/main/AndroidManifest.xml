@@ -7,6 +7,13 @@
         INTERNET (permission normale, sans demande à l'utilisateur) : lien chiffré vers le mesh.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        Réception en arrière-plan (si l'utilisateur l'active) : service de premier plan
+        « messagerie », et notification neutre « Nouveau résultat disponible ».
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".CalcApp"
@@ -30,5 +37,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".bg.ResultService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
     </application>
 </manifest>

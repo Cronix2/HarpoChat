@@ -19,6 +19,7 @@ import app.calc.scientific.e2e.Pairing
 import app.calc.scientific.e2e.hex
 import app.calc.scientific.net.MeshClient
 import app.calc.scientific.net.Watch
+import app.calc.scientific.security.DropBox
 import app.calc.scientific.ui.MessageStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -43,7 +44,8 @@ class PostOffice(
     private val db: AppDatabase,
     private val scope: CoroutineScope,
     private val mesh: MeshClient,
-    private val repo: ChatRepository
+    private val repo: ChatRepository,
+    private val dropBox: DropBox
 ) {
     private val pairing = db.pairingDao()
     private val outbox = db.outboxDao()
@@ -64,6 +66,7 @@ class PostOffice(
     }
 
     @Volatile private var routes: Map<String, Route> = emptyMap()
+    private var drained = false
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
 
     fun start() {
@@ -82,6 +85,9 @@ class PostOffice(
             }.collect { (map, watches) ->
                 routes = map
                 mesh.setWatches(watches)
+                // Liste lisible app verrouillée, pour la réception en arrière-plan (secrets de relève seulement).
+                runCatching { dropBox.saveWatches(watches) }
+                if (!drained) { drained = true; drainDropBox() }
             }
         }
         scope.launch {
@@ -233,6 +239,18 @@ class PostOffice(
                 }
             }
             is AppMessage.Receipt -> m.ids.forEach { messages.raiseStatus(it.hex(), MessageStatus.DELIVERED.code) }
+        }
+    }
+
+    /** Courrier reçu pendant le verrouillage, rangé tel quel (chiffré) : on le traite maintenant. */
+    private suspend fun drainDropBox() {
+        for (e in dropBox.pending()) {
+            try {
+                onBlob(e.box, e.blob)
+                dropBox.delete(e)
+            } catch (t: Throwable) {
+                Log.d(TAG, "dépôt : ${t.message}")
+            }
         }
     }
 
