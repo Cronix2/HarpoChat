@@ -7,6 +7,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import app.calc.scientific.bg.BackgroundPrefs
+import app.calc.scientific.bg.ResultService
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -58,6 +60,8 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
 
         val appLock = (application as CalcApp).appLock
+        // Réception en arrière-plan, si l'utilisateur l'a activée (démarrée depuis l'écran, comme l'exige Android).
+        if (BackgroundPrefs.isEnabled(this) && appLock.isConfigured()) ResultService.start(this)
         setContent {
             AppTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

@@ -54,6 +54,16 @@ class NetLogicTest {
         assertNull(t.medianRttMs())
     }
 
+    @Test fun `un loop revenu après son échéance est reconnu mais reste perdu`() {
+        val t = LoopTracker(graceMs = 1_000)
+        t.onSent("a", now = 0, routeDelaysMs = 0, nodesExceptGateway = emptyList())
+        t.expire(2_000)
+        assertTrue(t.onReturned("a", 5_000)) // pas pris pour une réponse inconnue
+        assertEquals(1, t.lost)
+        assertNull(t.medianRttMs())
+        assertFalse(t.onReturned("a", 6_000))
+    }
+
     @Test fun `un nœud qui perd plus de 75 pour cent sur 10 essais devient suspect`() {
         val t = LoopTracker()
         repeat(8) { t.onSent("l$it", 0, 0, listOf("bad", "good")) }

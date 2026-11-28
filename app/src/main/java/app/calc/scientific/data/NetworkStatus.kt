@@ -20,9 +20,12 @@ data class NetworkStatus(
     val coverTraffic: Boolean = false,
     /** Étapes du trajet d'un message, de la gateway à la boîte aux lettres. */
     val hops: List<String> = emptyList(),
+    /** Au moins 3 nœuds : les paquets traversent entrée, relais et boîte, trois nœuds distincts. */
+    val multiHop: Boolean = false,
     /**
-     * Moins de 3 nœuds : la gateway est aussi la boîte aux lettres. Le contenu reste chiffré,
-     * mais le réseau ne cache plus qui parle à qui. Mode de développement, signalé à l'écran.
+     * Plusieurs sauts ET au moins deux opérateurs distincts. Sinon (moins de 3 nœuds, ou tous
+     * parrainés par la même racine), un seul opérateur pourrait relier l'entrée et la boîte :
+     * le contenu reste chiffré, mais l'écran signale un « réseau de test ».
      */
     val anonymous: Boolean = false,
     /** Empreinte courte du nœud d'entrée (8 caractères hexadécimaux). */

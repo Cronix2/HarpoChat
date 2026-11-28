@@ -2,6 +2,8 @@
 package app.calc.scientific.security
 
 import android.content.Context
+import app.calc.scientific.bg.BackgroundPrefs
+import app.calc.scientific.bg.ResultService
 import app.calc.scientific.data.AppDatabase
 import app.calc.scientific.data.ChatRepository
 import app.calc.scientific.messaging.PostOffice
@@ -22,7 +24,8 @@ import java.io.File
 class Session internal constructor(
     val db: AppDatabase,
     private val dbKey: ByteArray,
-    val scope: CoroutineScope
+    val scope: CoroutineScope,
+    dropBox: DropBox
 ) {
     val repo = ChatRepository(db, scope).also { it.startExpiryJob() }
 
@@ -30,7 +33,7 @@ class Session internal constructor(
     val mesh = MeshClient(scope)
 
     /** Courrier : contacts, demandes, messages. Branché sur le mesh avant son démarrage. */
-    val post = PostOffice(db, scope, mesh, repo).also { it.start() }
+    val post = PostOffice(db, scope, mesh, repo, dropBox).also { it.start() }
 
     init {
         mesh.start()
@@ -70,6 +73,7 @@ class AppLock(
     val state: StateFlow<LockState> = _state.asStateFlow()
 
     private val mutex = Mutex()
+    private val dropBox = DropBox(context)
     @Volatile private var externalActivityInFlight = false
 
     /** Premier lancement : configure les PIN puis revient à la calculatrice (verrouillée). */
@@ -97,8 +101,9 @@ class AppLock(
                     AppDatabase.open(context, r.dbKey).also { it.openHelper.writableDatabase }
                 }
                 _state.value = LockState.Unlocked(
-                    Session(db, r.dbKey, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+                    Session(db, r.dbKey, CoroutineScope(SupervisorJob() + Dispatchers.IO), dropBox)
                 )
+                ResultService.clearResult(context)
                 AttemptOutcome.UNLOCKED
             }
             Vault.UnlockResult.Duress -> {
@@ -148,6 +153,9 @@ class AppLock(
 
     private fun wipeEverything() {
         lock()
+        ResultService.stop(context)
+        BackgroundPrefs.setEnabled(context, false)
+        dropBox.wipe()
         vault.wipe()
         wipeFiles()
     }

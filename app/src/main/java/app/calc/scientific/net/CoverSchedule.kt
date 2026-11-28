@@ -18,6 +18,12 @@ object CoverSchedule {
     /** Débit descendant demandé à la gateway (trame CoverRate) app au premier plan. */
     const val DOWN_RATE_FOREGROUND_HZ = 1.0
 
+    /** App verrouillée (réception en arrière-plan) : environ 0,7 Mo/h, 10 s de latence ajoutée. */
+    const val DOWN_RATE_BACKGROUND_HZ = 0.1
+
+    /** Trafic montant app verrouillée : réabonnements et ACK, au milieu des leurres. */
+    const val UP_RATE_BACKGROUND_HZ = 0.1
+
     /** Prochain intervalle, en millisecondes, pour un tirage uniforme [u] dans [0, 1). */
     fun nextDelayMs(rateHz: Double, u: Double): Long {
         require(rateHz > 0) { "débit nul" }

@@ -99,6 +99,7 @@ internal class Mailboxes(private val inbound: suspend (box: ByteArray, blob: Byt
     }
 
     fun onLinkReady(c: Ctx) = synchronized(lock) {
+        Log.d(TAG, "lien prêt : ${watches.size} boîte(s), ${c.nodes.size} nœud(s)")
         ctx = c
         surbs.clear()
         // Les abonnements et relèves en attente visaient l'ancienne connexion : on les refait.
@@ -153,8 +154,11 @@ internal class Mailboxes(private val inbound: suspend (box: ByteArray, blob: Byt
 
     /** Trame DELIVER qui n'est pas un loop : réponse à l'un de nos SURB. */
     suspend fun onDeliver(surbId: ByteArray, payload: ByteArray) {
-        val sc = synchronized(lock) { surbs.remove(surbId.hex()) } ?: return
-        val msg = runCatching { decodeMessage(recoverReply(sc.recovery, payload)) }.getOrNull() ?: return
+        val sc = synchronized(lock) { surbs.remove(surbId.hex()) }
+        if (sc == null) { Log.d(TAG, "DELIVER pour un SURB inconnu ${surbId.hex().take(8)}"); return }
+        val msg = runCatching { decodeMessage(recoverReply(sc.recovery, payload)) }
+            .onFailure { Log.d(TAG, "réponse ${sc.kind} illisible : ${it.message}") }.getOrNull() ?: return
+        Log.d(TAG, "réponse ${sc.kind} : ${msg.javaClass.simpleName}")
         when (msg) {
             is FfiMessage.FetchResponse -> {
                 deliver(sc, msg.blobs)
@@ -238,6 +242,7 @@ internal class Mailboxes(private val inbound: suspend (box: ByteArray, blob: Byt
             }
         }
         job.put?.let { t -> if (--t.remaining == 0) t.onSent() }
+        Log.d(TAG, "envoi ${job.kind} époque ${job.epoch}")
         return packet
     }
 
@@ -279,8 +284,11 @@ internal class Mailboxes(private val inbound: suspend (box: ByteArray, blob: Byt
         val FETCH_MAX: UShort = 16u
         const val FETCH_SURBS = 3
         const val FETCH_SURB_TTL_MS = 120_000L
-        /** Durée d'un abonnement (le serveur la plafonne à 24 h). */
-        val SUBSCRIBE_SECS: ULong = 6uL * 3600uL
+        /**
+         * Durée d'un abonnement : 30 min, renouvelé toutes les 15 min. Des abonnements courts
+         * limitent les SURB morts (anciennes connexions) dans la réserve des répliques.
+         */
+        val SUBSCRIBE_SECS: ULong = 30uL * 60uL
         /** Réabonnement et relève périodiques, au cas où un nœud aurait redémarré (SURB perdus). */
         const val REFRESH_MS = 15 * 60 * 1000L
     }

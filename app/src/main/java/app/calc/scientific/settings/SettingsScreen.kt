@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT
 package app.calc.scientific.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +48,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calc.scientific.BuildConfig
 import app.calc.scientific.data.ChatRepository
 import app.calc.scientific.data.DemoData
+import app.calc.scientific.bg.BackgroundPrefs
+import app.calc.scientific.bg.ResultService
 import app.calc.scientific.data.EphemeralChoice
 import app.calc.scientific.security.AppLock
 import app.calc.scientific.security.Session
@@ -66,6 +75,27 @@ fun SettingsScreen(session: Session, appLock: AppLock, onBack: () -> Unit, onCha
     var editName by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
     var ttlMenu by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    var background by remember { mutableStateOf(BackgroundPrefs.isEnabled(ctx)) }
+    // La demande de permission s'affiche par-dessus l'app : pas de verrouillage pendant ce temps.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        appLock.expectExternalActivity(false)
+    }
+    fun toggleBackground() {
+        background = !background
+        BackgroundPrefs.setEnabled(ctx, background)
+        if (background) {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                appLock.expectExternalActivity(true)
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            ResultService.start(ctx)
+        } else {
+            ResultService.stop(ctx)
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(Palette.Ink)) {
         ScreenHeader("Réglages", onBack) {
@@ -103,6 +133,16 @@ fun SettingsScreen(session: Session, appLock: AppLock, onBack: () -> Unit, onCha
             Group("Codes") {
                 SettingRow("Code secret et code d'effacement", "Modifier", onClick = onChangeCodes)
             }
+            Group("Réception") {
+                SettingRow("Réception en arrière-plan", if (background) "Activée" else "Désactivée", onClick = ::toggleBackground)
+            }
+            Text(
+                if (background)
+                    "Les messages arrivent même app verrouillée. Ils restent chiffrés jusqu'à votre code ; vous voyez seulement « Nouveau résultat disponible »."
+                else
+                    "Désactivée, les messages vous attendent dans le réseau (7 jours au plus) et arrivent à l'ouverture de l'app.",
+                style = MaterialTheme.typography.bodySmall, color = Palette.Faint, modifier = Modifier.padding(horizontal = 4.dp)
+            )
             Group("Confidentialité") {
                 Box {
                     SettingRow(

@@ -116,8 +116,10 @@ fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () ->
                     Notice("Hors ligne : ${status.error ?: "nœud injoignable"}. Nouvel essai automatique.", Palette.Amber)
                 status.phase == NetworkStatus.Phase.CONNECTING ->
                     Notice("Connexion au réseau…" + (status.error?.let { " Dernier échec : $it." } ?: ""), Palette.Muted)
-                online && status.totalRelays > 0 && !status.anonymous ->
+                online && status.totalRelays > 0 && !status.multiHop ->
                     Notice("Réseau de test : moins de 3 nœuds. Sans relais intermédiaire, le nœud d'entrée sait à quelle boîte vous écrivez.", Palette.Amber)
+                online && status.totalRelays > 0 && !status.anonymous ->
+                    Notice("Réseau de test : tous les nœuds dépendent d'un même opérateur. Vos paquets traversent plusieurs relais, mais un opérateur unique pourrait relier l'entrée et la boîte.", Palette.Amber)
             }
             Notice(
                 "Messages chiffrés de bout en bout avec AES-256-GCM, une clé par sens issue de l'échange X25519 fait à l'ajout du contact. La confidentialité persistante (double cliquet) arrive avec la prochaine version du noyau.",
