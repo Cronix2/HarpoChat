@@ -26,7 +26,7 @@ fun ChatRoute(session: Session, threadId: String, onBack: () -> Unit) {
         ephemeral = EphemeralChoice.of(thread?.ephemeralSeconds ?: 0),
         messages = messages,
         // Envoi dans la portée de session : il survit à la navigation, pas au verrouillage.
-        onSend = { text -> session.scope.launch { repo.sendLocal(threadId, text) } },
+        onSend = { text -> session.scope.launch { session.post.send(threadId, text) } },
         onEphemeralChange = { c -> session.scope.launch { repo.setEphemeral(threadId, c.seconds) } },
         onBack = onBack
     )

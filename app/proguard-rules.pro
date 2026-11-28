@@ -34,12 +34,6 @@
 -dontwarn net.zetetic.database.**
 
 # ---------------------------------------------------------------------------
-# EdDSA (net.i2p.crypto:eddsa) — used by our invite signing
-# ---------------------------------------------------------------------------
--keep class net.i2p.crypto.eddsa.** { *; }
--dontwarn net.i2p.crypto.eddsa.**
-
-# ---------------------------------------------------------------------------
 # ZXing
 # ---------------------------------------------------------------------------
 -keep class com.google.zxing.** { *; }
@@ -53,11 +47,6 @@
 -keep public class * extends android.app.Service
 -keep public class * extends android.content.BroadcastReceiver
 -keep public class * extends android.content.ContentProvider
-
-# ---------------------------------------------------------------------------
-# Reflection safety nets for data classes accessed via JSON
-# ---------------------------------------------------------------------------
--keepclassmembers class app.calc.scientific.link.Invite { *; }
 
 # ---------------------------------------------------------------------------
 # Discrétion : regroupe les classes non conservées à la racine (les noms de

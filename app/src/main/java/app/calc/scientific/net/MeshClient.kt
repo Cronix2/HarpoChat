@@ -44,7 +44,7 @@ import kotlin.math.min
  *    sinon un leurre, moitié drop, moitié loop. Les loops mesurent le délai et les pertes.
  * 4. Surveille le lien et se reconnecte avec un délai croissant.
  *
- * L'envoi et la réception de messages (PUT, SUBSCRIBE, PUSH) s'ajoutent à ce socle à l'étape N2.
+ * 5. Achemine le courrier des boîtes surveillées ([Mailboxes]) : abonnements, relèves, dépôts, ACK.
  */
 class MeshClient(
     private val scope: CoroutineScope,
@@ -61,6 +61,16 @@ class MeshClient(
     @Volatile private var directoryAt = 0L
     @Volatile private var directoryWanted = false
 
+    /** Blobs reçus dans une boîte surveillée. L'ACK part quand le traitement a réussi. */
+    @Volatile var inbound: (suspend (box: ByteArray, blob: ByteArray) -> Unit)? = null
+    private val mailboxes = Mailboxes { box, blob -> inbound?.invoke(box, blob) ?: error("aucun destinataire") }
+
+    /** Boîtes à surveiller (abonnement temps réel et relève). */
+    fun setWatches(list: List<Watch>) = mailboxes.setWatches(list)
+
+    /** Dépose [blob] dans la boîte [box] ; [onSent] quand toutes les copies ont quitté le téléphone. */
+    fun put(box: ByteArray, blob: ByteArray, onSent: () -> Unit) = mailboxes.put(box, blob, onSent)
+
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch(Dispatchers.IO) { runForever() }
@@ -71,6 +81,7 @@ class MeshClient(
         job = null
         link?.close()
         link = null
+        mailboxes.close()
         _status.value = NetworkStatus.Stopped
     }
 
@@ -99,6 +110,7 @@ class MeshClient(
                 link = null
                 view = null
                 loops.reset()
+                mailboxes.onLinkLost()
             }
             attempt++
             val wait = backoffMs(attempt)
@@ -134,11 +146,12 @@ class MeshClient(
 
         launch { uplink(l, inbox) }
         launch { watchdog(l) }
-        receive(l, rootIds) // rend la main (ou lève) quand le lien tombe
+        receive(l, rootIds, inbox) // rend la main (ou lève) quand le lien tombe
         throw LinkException("lien fermé par le nœud")
     }
 
-    private suspend fun receive(l: NodeLink, rootIds: List<ByteArray>) {
+    private suspend fun receive(l: NodeLink, rootIds: List<ByteArray>, inbox: ByteArray) {
+        var ready = false
         while (true) {
             val frame = l.receive() ?: return
             when (frame.kind) {
@@ -146,13 +159,18 @@ class MeshClient(
                     val nodes = verifyDirectory(frame.body, rootIds, nowSecs())
                     view = nodes
                     directoryAt = System.currentTimeMillis()
+                    if (nodes.any { it.idPub.contentEquals(l.nodeId) }) {
+                        val ok = usable(nodes, l.nodeId)
+                        if (!ready) mailboxes.onLinkReady(Mailboxes.Ctx(ok, l.nodeId, inbox)) else mailboxes.onNodes(ok)
+                        ready = true
+                    }
                     publish(l)
                 }
                 FfiFrameKind.DELIVER -> {
                     if (frame.body.size >= 16) {
-                        val id = frame.body.copyOfRange(0, 16).hex()
-                        if (loops.onReturned(id, System.currentTimeMillis())) publish(l)
-                        // Sinon : réponse à un SURB (FETCH / SUBSCRIBE), traitée à l'étape N2.
+                        val idBytes = frame.body.copyOfRange(0, 16)
+                        if (loops.onReturned(idBytes.hex(), System.currentTimeMillis())) publish(l)
+                        else mailboxes.onDeliver(idBytes, frame.body.copyOfRange(16, frame.body.size))
                     }
                 }
                 else -> Unit
@@ -169,6 +187,12 @@ class MeshClient(
                 l.send(FfiFrameKind.DIRECTORY_REQ, ByteArray(0))
                 continue
             }
+            // Un vrai paquet s'il y en a un en attente, sinon un leurre : le rythme ne change pas.
+            val real = mailboxes.nextPacket()
+            if (real != null) {
+                l.send(FfiFrameKind.SPHINX, real)
+                continue
+            }
             val nodes = view
             val packet = nodes?.let { runCatching { if (rnd.nextBoolean()) drop(it, l.nodeId) else loop(it, l.nodeId, inbox) }.getOrNull() }
             if (packet != null) l.send(FfiFrameKind.SPHINX, packet)
@@ -183,6 +207,7 @@ class MeshClient(
             val now = System.currentTimeMillis()
             if (now - l.lastRxAt > SILENCE_LIMIT_MS) throw LinkException("le nœud ne répond plus")
             loops.expire(now)
+            mailboxes.tick(now)
             if (now - directoryAt > DIRECTORY_REFRESH_MS) { directoryWanted = true; directoryAt = now }
             publish(l)
         }

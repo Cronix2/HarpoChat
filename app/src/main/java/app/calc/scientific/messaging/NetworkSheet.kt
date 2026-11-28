@@ -119,7 +119,10 @@ fun NetworkSheet(session: Session, protection: ProtectionLevel, onDismiss: () ->
                 online && status.totalRelays > 0 && !status.anonymous ->
                     Notice("Réseau de test : moins de 3 nœuds. Sans relais intermédiaire, le nœud d'entrée sait à quelle boîte vous écrivez.", Palette.Amber)
             }
-            Notice("Les messages passeront par ce réseau à la prochaine étape. Pour l'instant, le lien mesure le trajet et émet le trafic leurre.", Palette.Muted)
+            Notice(
+                "Messages chiffrés de bout en bout avec AES-256-GCM, une clé par sens issue de l'échange X25519 fait à l'ajout du contact. La confidentialité persistante (double cliquet) arrive avec la prochaine version du noyau.",
+                Palette.Muted
+            )
             SecondaryButton("Fermer", onDismiss, Modifier.fillMaxWidth())
         }
     }

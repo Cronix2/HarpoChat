@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 package app.calc.scientific.data
 
-import app.calc.scientific.link.InviteIdentity
+import app.calc.scientific.e2e.Crypto
 import app.calc.scientific.ui.ChatMsg
 import app.calc.scientific.ui.MessageStatus
 import kotlinx.coroutines.CoroutineScope
@@ -17,8 +17,8 @@ import java.util.UUID
 /**
  * Accès aux conversations, sur la base ouverte de la session courante.
  *
- * Le réseau n'existe pas encore côté Android (il viendra avec `harpochat-core`) :
- * [sendLocal] simule l'accusé de réception et une réponse, pour la démonstration.
+ * Les échanges avec de vrais contacts passent par [app.calc.scientific.messaging.PostOffice].
+ * [sendLocal] ne sert qu'aux fils de démonstration : il simule l'accusé de réception et une réponse.
  */
 class ChatRepository(
     private val db: AppDatabase,
@@ -93,14 +93,16 @@ class ChatRepository(
     fun settingFlow(key: String): Flow<String?> = kv.flow(key)
     suspend fun putSetting(key: String, value: String) = kv.put(KvEntity(key, value))
 
-    /** Identité Ed25519 de l'appareil, créée au premier besoin (transitoire jusqu'à harpochat-core). */
-    suspend fun identity(): InviteIdentity =
-        getSetting(KEY_IDENTITY_SEED)?.let { InviteIdentity.fromSeed(Base64.getDecoder().decode(it)) }
-            ?: InviteIdentity.generate().also { putSetting(KEY_IDENTITY_SEED, Base64.getEncoder().encodeToString(it.privateSeed)) }
+    /** Clé publique Ed25519 de l'appareil, créée au premier besoin. */
+    private suspend fun identityPublicKey(): ByteArray {
+        val seed = getSetting(KEY_IDENTITY_SEED)?.let { Base64.getDecoder().decode(it) }
+            ?: Crypto.random(32).also { putSetting(KEY_IDENTITY_SEED, Base64.getEncoder().encodeToString(it)) }
+        return Crypto.ed25519Public(seed)
+    }
 
     /** Empreinte lisible de la clé publique (16 caractères hexadécimaux, par groupes de 4). */
     suspend fun fingerprint(): String =
-        MessageDigest.getInstance("SHA-256").digest(identity().publicKey).take(8)
+        MessageDigest.getInstance("SHA-256").digest(identityPublicKey()).take(8)
             .joinToString("") { "%02X".format(it) }.chunked(4).joinToString(" ")
 
     suspend fun defaultEphemeralSeconds(): Long = getSetting(KEY_DEFAULT_EPHEMERAL)?.toLongOrNull() ?: 0L

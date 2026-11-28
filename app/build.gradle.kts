@@ -174,8 +174,8 @@ dependencies {
     implementation("androidx.annotation:annotation:1.9.1") // bindings générés en mode Android
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // ---------- Ed25519 (format d'invitation transitoire, remplacé par harpochat-core) ----------
-    implementation("net.i2p.crypto:eddsa:0.3.0")
+    // ---------- Chiffrement de bout en bout : X25519, HKDF, Ed25519 (API légère, licence MIT) ----------
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
     // ---------- Tests ----------
     testImplementation(libs.junit)
