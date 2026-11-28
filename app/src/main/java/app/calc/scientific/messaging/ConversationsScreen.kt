@@ -73,6 +73,7 @@ fun ConversationsScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var showNetwork by remember { mutableStateOf(false) }
     val net by session.mesh.status.collectAsStateWithLifecycle()
+    val requests by session.post.incomingRequests.collectAsStateWithLifecycle(initialValue = emptyList())
     val shown = remember(threads, query) {
         if (query.isBlank()) threads
         else threads.filter { it.title.contains(query, true) || it.lastBody.orEmpty().contains(query, true) }
@@ -85,6 +86,9 @@ fun ConversationsScreen(
         ) {
             item(key = "header") {
                 Header(query, { query = it }, net, onLock, onOpenSettings, onNetwork = { showNetwork = true })
+            }
+            if (requests.isNotEmpty()) {
+                item(key = "requests") { RequestsBanner(requests.size, onAddContact) }
             }
             if (threads.isEmpty()) {
                 item(key = "empty") { EmptyState() }
@@ -261,4 +265,24 @@ internal fun networkSummary(net: NetworkStatus): Pair<String, Color> = when (net
     NetworkStatus.Phase.CONNECTING -> "Connexion au réseau…" to Palette.Muted
     NetworkStatus.Phase.OFFLINE -> "Hors ligne · nouvel essai automatique" to Palette.Amber
     NetworkStatus.Phase.STOPPED -> "Réseau arrêté" to Palette.Muted
+}
+
+/** Demandes d'ajout en attente de ma décision : elles mènent à l'écran d'ajout. */
+@Composable
+private fun RequestsBanner(count: Int, onOpen: () -> Unit) {
+    Row(
+        Modifier.padding(horizontal = 20.dp, vertical = 6.dp).fillMaxWidth()
+            .background(Palette.MintPanel, RoundedCornerShape(14.dp))
+            .clickable(role = Role.Button, onClick = onOpen)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(LineIcons.ShieldCheck, null, tint = Palette.Mint, modifier = Modifier.size(18.dp))
+        Text(
+            if (count == 1) "1 demande de contact à examiner" else "$count demandes de contact à examiner",
+            style = MaterialTheme.typography.bodyMedium, color = Palette.MintText, modifier = Modifier.weight(1f)
+        )
+        Icon(LineIcons.ChevronRight, null, tint = Palette.Mint, modifier = Modifier.size(16.dp))
+    }
 }

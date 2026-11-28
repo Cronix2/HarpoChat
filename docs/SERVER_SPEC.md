@@ -284,7 +284,7 @@ type 0x11 PUSH   { mailbox_id: [32], blobs: [{ id: [16], blob: bytes }] }       
 type 0x12 NOTIFY { mailbox_id: [32], pending: u16 }                             // « il y a du courrier », si trop gros pour un PUSH
 ```
 
-- `blob` est **toujours** un message déjà chiffré de bout en bout par le client (libsignal, mode *sealed sender* : même l'identité de l'expéditeur est dans le chiffré). Le serveur **NE DOIT PAS** essayer de l'interpréter.
+- `blob` est **toujours** un message déjà chiffré de bout en bout par le client. L'identité de l'expéditeur est dans le chiffré, et la boîte est propre à un contact et à un sens. Le blob est bourré à l'une de quatre tailles fixes. Le chiffrement est le double cliquet Olm (vodozemac, dans le noyau partagé) ; en attendant, AES-256-GCM avec une clé par sens issue de l'appairage. Le serveur **NE DOIT PAS** essayer de l'interpréter.
 - **Gros contenus (médias)** : le client découpe le média en morceaux de taille fixe, chiffrés avec une clé aléatoire, et les dépose en PUT dans une boîte éphémère dédiée. Seule la clé et la référence passent dans le message E2EE. Pour un groupe, le média est donc déposé **une seule fois**, et seule la clé est diffusée à chaque membre.
 - Le serveur **DOIT** rejeter les types inconnus sans effet de bord, et répondre de façon uniforme (pas d'oracle d'erreur exploitable).
 
@@ -294,7 +294,7 @@ type 0x12 NOTIFY { mailbox_id: [32], pending: u16 }                             
 
 Ce que le client fournit ou attend, afin que les deux implémentations restent alignées :
 
-- **Invitation de contact** (QR ou fichier) : clé d'identité libsignal + pré-clés + secret d'appairage à usage unique + `write_key`/`read_key` initiales + **3 à 5 descripteurs de nœuds** pour l'amorçage + date d'expiration. Le serveur n'intervient pas dans l'appairage.
+- **Invitation de contact** (QR ou texte envoyé par une autre messagerie) : un secret d'appairage à usage unique et une date d'expiration (15 min en personne, 48 h à distance). Les clés X25519 éphémères, et plus tard les clés Olm, passent dans la demande et l'acceptation. Protocole complet : `docs/design/2026-11-28-network-n2-design.md`. Le serveur n'intervient pas dans l'appairage.
 - **Consentement** : A affiche l'invitation, B la scanne et envoie une demande dans une boîte temporaire, puis **A accepte explicitement**. Sans acceptation, B ne reçoit jamais les clés d'écriture des boîtes permanentes.
 - **Noyau protocole partagé (décidé)** : le format Sphinx, l'encodage CBOR, la dérivation des boîtes, le client Noise et le format des jetons vivent dans un **crate Rust commun** (nom de travail : `harpochat-core`), compilé à la fois dans le serveur et dans l'app Android (via `uniffi`, avec `cargo-ndk` pour les ABI `arm64-v8a`, `armeabi-v7a` et `x86_64`). Une seule implémentation, donc zéro divergence de format. Le serveur ayant déjà démarré en Rust, ce crate **DEVRAIT** en être extrait le plus tôt possible.
   - Le crate ne doit contenir **aucun I/O spécifique à une plateforme**, uniquement des fonctions pures et des machines à états. Le réseau reste dans le serveur d'un côté et dans l'app de l'autre.
@@ -393,6 +393,7 @@ Ce que le client fournit ou attend, afin que les deux implémentations restent a
 | Noyau protocole | **Crate Rust partagé** entre le serveur et l'app (§9) |
 | Taille du mesh au lancement | **~5 nœuds** : chemins courts, rôles cumulés (§6.1) |
 | Groupes | **Côté client uniquement** (diffusion), invisibles pour le serveur (P6) |
+| Chiffrement de bout en bout (2026-11-28) | **Olm (vodozemac)** dans le noyau partagé, et non libsignal (licence AGPL, poids, messages post-quantiques plus gros qu'un paquet) |
 
 | Emplacement de `harpochat-core` | Crate du **dépôt `harpochat-server`** (workspace Cargo : `harpochat-core` + `harpochat-server`), consommé par l'app Android **par tag Git** |
 | Nœuds racines | **2**, opérés par le porteur du projet, sur deux réseaux différents (domicile + VPS) |

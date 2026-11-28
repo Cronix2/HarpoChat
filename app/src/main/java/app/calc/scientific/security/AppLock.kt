@@ -4,6 +4,7 @@ package app.calc.scientific.security
 import android.content.Context
 import app.calc.scientific.data.AppDatabase
 import app.calc.scientific.data.ChatRepository
+import app.calc.scientific.messaging.PostOffice
 import app.calc.scientific.net.MeshClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,14 @@ class Session internal constructor(
     val repo = ChatRepository(db, scope).also { it.startExpiryJob() }
 
     /** Lien au mesh : ouvert seulement pendant la session, coupé au verrouillage. */
-    val mesh = MeshClient(scope).also { it.start() }
+    val mesh = MeshClient(scope)
+
+    /** Courrier : contacts, demandes, messages. Branché sur le mesh avant son démarrage. */
+    val post = PostOffice(db, scope, mesh, repo).also { it.start() }
+
+    init {
+        mesh.start()
+    }
 
     internal fun close() {
         mesh.stop()

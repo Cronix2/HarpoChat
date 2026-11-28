@@ -57,7 +57,7 @@
 
 There are **no default codes**: on first launch the user chooses both codes. They are never stored — they are stretched (PBKDF2) and bound to the phone's secure hardware (Android Keystore, StrongBox when available) to derive the key that encrypts the local database (SQLCipher). Without the code **and** the physical phone, the data is unreadable.
 
-Networking (a zero-knowledge relay mesh) is developed in the separate `HarpoChat_Serveur` repository; see [`docs/SERVER_SPEC.md`](docs/SERVER_SPEC.md). The app embeds the shared Rust core (`harpochat-core`, updated with `scripts/update-core.sh`) and, while unlocked, keeps an authenticated link to the mesh (TLS + Noise, node identity checked against embedded roots) with Poisson cover traffic and loop measurements. Message delivery over the mesh is the next step; until then, conversations are simulated locally.
+Networking (a zero-knowledge relay mesh) is developed in the separate `HarpoChat_Serveur` repository; see [`docs/SERVER_SPEC.md`](docs/SERVER_SPEC.md). The app embeds the shared Rust core (`harpochat-core`, updated with `scripts/update-core.sh`) and, while unlocked, keeps an authenticated link to the mesh (TLS + Noise, node identity checked against embedded roots) with Poisson cover traffic and loop measurements. Contacts are added with explicit consent (QR in person or an invite sent through another messenger, with a 6-digit check code), and messages travel end-to-end encrypted through the mesh mailboxes, with a persistent outbox and delivery receipts. Forward secrecy (Olm double ratchet via vodozemac in the shared core) is the next step.
 
 ---
 
@@ -92,10 +92,10 @@ app/src/main/java/app/calc/scientific/   # neutral package name (same as the app
 ├── security/              # Vault (key derivation), KeyBinder (Keystore), AppLock, PinPolicy
 ├── data/                  # Room + SQLCipher database, repository
 ├── setup/                 # First-launch screen (choose both codes)
-├── messaging/             # Conversations, chat, QR / pairing-code screens
+├── messaging/             # Conversations, chat, add contact, PostOffice (mail routing)
 ├── settings/              # Display name, change codes, security status
 ├── navigation/            # Private-space navigation graph
-├── link/                  # Signed invitation format (transitional, replaced by harpochat-core)
+├── e2e/                   # Pairing protocol, end-to-end encryption, message format
 ├── net/                   # Mesh link: trust roots, TLS + Noise link, cover traffic, loops
 └── ui/                    # Theme, chat components, privacy helpers
 app/src/main/java/org/corekit/          # generated bindings of the shared Rust core (scripts/update-core.sh)

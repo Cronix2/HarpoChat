@@ -49,6 +49,14 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(m: MessageEntity)
 
+    /** Message reçu : un doublon (même identifiant) est ignoré. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(m: MessageEntity): Long
+
+    /** Accusé de réception : ne fait jamais reculer un statut (lu reste lu). */
+    @Query("UPDATE messages SET status = :status WHERE id = :id AND sender = 'me' AND status < :status")
+    suspend fun raiseStatus(id: String, status: Int)
+
     @Query("UPDATE messages SET status = :status WHERE id = :id")
     suspend fun setStatus(id: String, status: Int)
 
@@ -70,4 +78,38 @@ interface KvDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(entry: KvEntity)
+}
+
+@Dao
+interface PairingDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertInvite(i: InviteEntity)
+    @Query("SELECT * FROM invites") fun invitesFlow(): Flow<List<InviteEntity>>
+    @Query("SELECT * FROM invites WHERE id = :id") suspend fun invite(id: String): InviteEntity?
+    @Query("DELETE FROM invites WHERE id = :id") suspend fun deleteInvite(id: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertOutRequest(r: OutRequestEntity)
+    @Query("SELECT * FROM requests_out ORDER BY createdAt DESC") fun outRequestsFlow(): Flow<List<OutRequestEntity>>
+    @Query("DELETE FROM requests_out WHERE id = :id") suspend fun deleteOutRequest(id: String)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertInRequest(r: InRequestEntity)
+    @Query("SELECT * FROM requests_in ORDER BY receivedAt DESC") fun inRequestsFlow(): Flow<List<InRequestEntity>>
+    @Query("SELECT * FROM requests_in WHERE id = :id") suspend fun inRequest(id: String): InRequestEntity?
+    @Query("DELETE FROM requests_in WHERE id = :id") suspend fun deleteInRequest(id: String)
+    @Query("DELETE FROM requests_in WHERE inviteId = :inviteId") suspend fun deleteInRequestsFor(inviteId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPeer(p: PeerEntity)
+    @Query("SELECT * FROM peers") fun peersFlow(): Flow<List<PeerEntity>>
+    @Query("SELECT * FROM peers WHERE threadId = :threadId") suspend fun peer(threadId: String): PeerEntity?
+
+    /** Invitations et demandes expirées. Une demande reçue disparaît avec son invitation. */
+    @Query("DELETE FROM invites WHERE expiresAt <= :now") suspend fun purgeInvites(now: Long)
+    @Query("DELETE FROM requests_out WHERE expiresAt <= :now") suspend fun purgeOutRequests(now: Long)
+    @Query("DELETE FROM requests_in WHERE inviteId NOT IN (SELECT id FROM invites)") suspend fun purgeOrphanInRequests()
+}
+
+@Dao
+interface OutboxDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(o: OutboxEntity)
+    @Query("SELECT * FROM outbox ORDER BY createdAt") fun flow(): Flow<List<OutboxEntity>>
+    @Query("DELETE FROM outbox WHERE id = :id") suspend fun delete(id: String)
 }
